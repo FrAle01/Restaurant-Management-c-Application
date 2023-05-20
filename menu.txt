@@ -1,0 +1,8 @@
+A1 - Tagliere toscano			9
+A2 - Coccoli con affettati		8
+P1 - Pappardelle al cinghiale		13
+P2 - Risotto ai funghi			11
+S1 - Arista con patate			20
+S2 - Bistecca alla fiorentina		45
+D1 - Tiramisù				5
+D2 - Panna cotta			5
