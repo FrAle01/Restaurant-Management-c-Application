@@ -148,7 +148,7 @@ int main (int argnum, char** arg) {
 
                 }else{ //  Gestione richieste su socket connessi
 
-                    char disp='';
+                    char disp=' ';
 
                     // recupero il tipo ti dispositivo collegato al socket interessato
                     devices = fopen("devices.txt", "r");
