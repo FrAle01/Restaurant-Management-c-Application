@@ -67,6 +67,22 @@ void inserisci_tavoli(FILE* fd){
     }
 }
 
+void deleteLine(FILE* src, const int linenum){
+    FILE *temp;
+    char aux[BUFF_DIM];
+    int count = 1;
+
+    temp = fopen("delete.temp", "w");
+
+    while ((fgets(aux, BUFF_DIM, src)) != NULL){
+      if (linenum != count)
+         fputs(aux, temp);
+      count++;
+   }
+
+   fclose(temp);
+}
+
 int main (int argnum, char** arg) {
 
     int listener, ret, new_sd, cl_len;
@@ -148,7 +164,7 @@ int main (int argnum, char** arg) {
 
                 }else{ //  Gestione richieste su socket connessi
 
-                    char disp='';
+                    char disp=' ';
 
                     // recupero il tipo ti dispositivo collegato al socket interessato
                     devices = fopen("devices.txt", "r");
@@ -166,18 +182,22 @@ int main (int argnum, char** arg) {
                             memset(buffer, '\0', BUFF_DIM); // pulizia buffer
                             ret = recv(i, (void*)buffer, CL_DIM, 0);
                             if(ret == 0){       // Client si è disconnesso
+                                int line = 0;
                                 close(i);
                                 FD_CLR(i, &master_r);
                                 devices = fopen("devices.txt", "r+");
                                 while(!feof(devices)){
                                     fscanf(devices, "%d %c %s", &dev.fd, &dev.type, dev.addr);
+                                    line++;
                                     if (dev.fd == i){
-                                        fseek(devices, -sizeof(dev), SEEK_CUR);
-                                        // TROVARE COME ELIMINARE RIGA DA FILE
+                                        fseek(devices, 0, SEEK_SET);
+                                        deleteLine(devices, line);
                                         break;
                                     }
                                 }                  
                                 fclose(devices);
+                                remove("devices.txt");
+                                rename("delete.temp", "devices.txt");
                                 continue;
                             }
                             sscanf(buffer,"%c", &option);
@@ -269,13 +289,16 @@ int main (int argnum, char** arg) {
                                 devices = fopen("devices.txt", "r+");
                                 while(!feof(devices)){
                                     fscanf(devices, "%d %c %s", &dev.fd, &dev.type, dev.addr);
+                                    line++;
                                     if (dev.fd == i){
-                                        fseek(devices, -sizeof(dev), SEEK_CUR);
-                                        // TROVARE COME ELIMINARE RIGA DA FILE
+                                        fseek(devices, 0, SEEK_SET);
+                                        deleteLine(devices, line);
                                         break;
                                     }
                                 }                  
                                 fclose(devices);
+                                remove("devices.txt");
+                                rename("delete.temp", "devices.txt");
                                 continue;
                             }
                             td_value = ntohs(td_value);
