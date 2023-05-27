@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#define SCNu16   "u"
+#define SCNu16   "d"
 // decimal scanf format for int16_t
 
 #define BUFF_DIM 1048
@@ -57,7 +57,7 @@ void get_ts(char* arg){     // funzione che inserisce in arg il timestamp
 
     time(&raw);
     ts = localtime(&raw);
-    sprintf(arg, "%02d-%02d-%d_%02d:%02d:%02d\0", (*ts).tm_mday, (*ts).tm_mon, (*ts).tm_year+1900, (*ts).tm_hour, (*ts).tm_min, (*ts).tm_sec);
+    sprintf(arg, "%02d-%02d-%d_%02d:%02d:%02d", (*ts).tm_mday, (*ts).tm_mon, (*ts).tm_year+1900, (*ts).tm_hour, (*ts).tm_min, (*ts).tm_sec);
 }
 
 void inserisci_tavoli(FILE* fd){
@@ -85,7 +85,8 @@ void deleteLine(FILE* src, const int linenum){
 
 int main (int argnum, char** arg) {
 
-    int listener, ret, new_sd, cl_len;
+    int listener, ret, new_sd;
+    uint32_t cl_len;
     struct sockaddr_in my_addr, cl_addr;
     int port;
     
@@ -284,6 +285,7 @@ int main (int argnum, char** arg) {
                             
                             ret = recv(i, (void*)&td_value, sizeof(uint16_t), 0);
                             if(!ret){
+                                int line = 0;
                                 close(i);
                                 FD_CLR(i, &master_r);
                                 devices = fopen("devices.txt", "r+");
