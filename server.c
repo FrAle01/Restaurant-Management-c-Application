@@ -12,7 +12,7 @@
 #define SCNu16   "d"
 // decimal scanf format for int16_t
 
-#define BUFF_DIM 1048
+#define BUFF_DIM 1024
 #define MAX_TABLE 3
 #define CL_DIM 49 // dim messaggio protocollo con cliente prenotazione
 
@@ -42,12 +42,13 @@ struct tavolo{
     int avaiable;       // tavolo libero o no
 };
 struct tavolo tav[MAX_TABLE];       // tavoli presenti nel ristorante
+int sock_tb[MAX_TABLE];             // array associativo TavoloId <-> socket
 
 struct comanda{
     char orderId[5];    // codice comanda
     char tbl[4];        // codice tavolo
     int tableFD;        // socket del tavolo (per notificare stato comanda)
-    char order[75];     // comnda effettiva
+    char order[75];     // comanda effettiva
     char status;        // stato comanda ('a' in attesa, 'p' in preparazione, 's' in servizio)
 };
 
@@ -61,9 +62,9 @@ void get_ts(char* arg){     // funzione che inserisce in arg il timestamp
 }
 
 void inserisci_tavoli(FILE* fd){
-    int i;
-    for(i=0; i < MAX_TABLE; i++){
-        fscanf(fd, "%s %s %s %d", tav[i].tb, tav[i].room, tav[i].descr, &tav[i].chair);
+    int j;
+    for(j=0; j < MAX_TABLE; j++){
+        fscanf(fd, "%s %s %s %d", tav[j].tb, tav[j].room, tav[j].descr, &tav[j].chair);
     }
 }
 
@@ -83,10 +84,31 @@ void deleteLine(FILE* src, const int linenum){
    fclose(temp);
 }
 
+int tbtosock(char *cod_tav){    // dato un codice di tavolo ne restituisce il socket connesso
+    int n, sock;
+    sscanf(cod_tav, "T%d", &n);
+    if(n < MAX_TABLE){
+        sock = sock_tb[--n];
+        return sock;
+    }else{
+        return -1;  // codice tavolo non esistente
+    }
+}
+
+int socktotb(int sock){         // dato un socket restituisce, se esiste, il codice del tavolo associato
+    int j;
+    for(j = 0; j< MAX_TABLE; j++){
+        if(sock_tb[j] == sock){
+            return ++j;
+        }
+    }
+    return -1;      // socket non associato a td
+}
+
 int main (int argnum, char** arg) {
 
     int listener, ret, new_sd;
-    uint32_t cl_len;
+    socklen_t cl_len;
     struct sockaddr_in my_addr, cl_addr;
     int port;
     
@@ -97,6 +119,7 @@ int main (int argnum, char** arg) {
     struct booked attend;               // per controllo su table device
     uint16_t reservationIds = rand()%1000 + 2001;   // genera un valore casuale tra 2001 e 3000 da cui inizieranno i codici di prenotazione assegnati
     uint16_t td_value;
+    int j;
 
 
     fd_set master_r;     // creo insiemi di descrittori
@@ -118,6 +141,11 @@ int main (int argnum, char** arg) {
         printf("File tables.txt non esistente\n");
         exit(1);
     }
+
+    for(j = 0; j < MAX_TABLE; j++){ // inizializzo tutti i tavoli 
+        sock_tb[j]  = -1;
+    }
+
     listener = socket(AF_INET, SOCK_STREAM, 0); // creazione socket
     port = (argnum == 2) ? atoi(arg[1]) : 4242;
 
@@ -163,7 +191,7 @@ int main (int argnum, char** arg) {
                     fclose(devices);
 
 
-                }else{ //  Gestione richieste su socket connessi
+                }else{ //  Gestione richieste su socket connessi e su stdin (gestito come default dai socket remoti)
 
                     char disp=' ';
 
@@ -179,6 +207,8 @@ int main (int argnum, char** arg) {
                     fclose(devices);
 
                     switch(disp){
+
+                /*GESTIONE PROTOCOLLO CON CLIENT*/
                         case 'C':
                             memset(buffer, '\0', BUFF_DIM); // pulizia buffer
                             ret = recv(i, (void*)buffer, CL_DIM, 0);
@@ -280,12 +310,16 @@ int main (int argnum, char** arg) {
                                 fclose(prenotazioni);
                             } 
 
-                        break;
+                        break;                    
+                /*FINE GESTIONE PROTOCOLLO CON CLIENT*/
+
+
+                /*GESTIONE PROTOCOLLO CON TABLE DEVICE*/
                         case 'T':
                             
                             ret = recv(i, (void*)&td_value, sizeof(uint16_t), 0);
                             if(!ret){
-                                int line = 0;
+                                int line = 0, t;
                                 close(i);
                                 FD_CLR(i, &master_r);
                                 devices = fopen("devices.txt", "r+");
@@ -301,10 +335,13 @@ int main (int argnum, char** arg) {
                                 fclose(devices);
                                 remove("devices.txt");
                                 rename("delete.temp", "devices.txt");
+                                t = socktotb(i);
+                                sock_tb[--t] = -1;  // rimuovo associazione tavolo da un socket
                                 continue;
                             }
                             td_value = ntohs(td_value);
                     printf("Da table: %d\n", td_value);
+            // Protocollo di login su td --> (tuti i codice prenotazione ricevuti  > 2000)
                             if(td_value > 2000){    // gestione del codice di prenotazione inviato 
                                 prenotazioni = fopen("reservation.txt", "r+");
                                 if(prenotazioni != NULL){
@@ -315,19 +352,25 @@ int main (int argnum, char** arg) {
 
                     printf("Found %s %d %d\n", attend.tb, attend.bookId, attend.attendance);
                                             uint16_t n_tav;
+                                            int ii;
                                             sscanf(attend.tb, "T%d", &n_tav);
+                                            ii = n_tav - 1;
+                                            if(sock_tb[ii] == -1){   //al tavolo ancora non c'è associato un socket
+                                                sock_tb[ii] = i;    // associo il socket 'i' al tavolo
+                                            }else{
+                                                printf("Error! Tavolo già in uso\n");
+                                            }
+
                                             n_tav = htons(n_tav);
                                             send(i, (void*)&n_tav, sizeof(uint16_t), 0);
                                             fseek(prenotazioni, -1, SEEK_CUR);  // metto il puntatore prima del valore di attendance
                                             fprintf(prenotazioni, "1");     // metto 'attendance' a 1 indicando che un cliente ha usato quella prenotazione
-                    printf("codice trovato\n");
                                             break;
                                         }
                                         if(td_value == attend.bookId && attend.attendance == 1){    // prenotazione esistente ma già usata
                                             uint16_t used = MAX_TABLE +1;
                                             used = htons(used);
                                             send(i, (void*)&used, sizeof(uint16_t), 0);
-                    printf("codice già usato\n");
                                             break;
                                         }                                    
                                     }
@@ -341,22 +384,27 @@ int main (int argnum, char** arg) {
                                     fclose(prenotazioni);
                                 }
                             }
+            // Ricezione comanda da td
                             if(td_value <= 2000){   // arrivo nuova comanda e dim msg data da td_value
                                 
                                 memset(buffer, '\0', BUFF_DIM);         // pulizia buffer
                                 recv(i, (void*)buffer, td_value, 0);    // ricevo la comanda
+                    printf("%s \n", buffer);
 
                             }
 
                         break;
-                    /*
-                        case 'K':
+                /*FINE GESTIONE PROTOCOLLO CON TABLE DEVICE*/
+
+                    
+                /*GESTIONE PROTOCOLLO CON KITCHEN DEVICE*/
+                    /*  case 'K':
                         break;*/
                         default:
                             memset(buffer, '\0', BUFF_DIM);
                             fgets(buffer, BUFF_DIM, stdin);
                             printf("%s\n", buffer);
-        
+                            
                         break;
                     }
                     

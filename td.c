@@ -10,8 +10,8 @@
 #include <unistd.h>
 // #include <sys/time.h>
 
-#define BUFF_DIM 1048
-#define MENU_DIM 1048
+#define BUFF_DIM 1024
+#define MENU_DIM 1024
 #define STAT_COMM 8 // dimensione del messaggio dal server che comunica lo stato di una comanda
                     // cod_com (5) + stato (1) + spazio e finestringa (2)
 #define MAX_TABLE 3
@@ -32,82 +32,71 @@ struct ordine{
 int conta_piatti(){
     FILE *fd;
     int n;
-    char aux[128];
+    char aux[BUFF_DIM];
 
     fd = fopen("menu.txt", "r");
     if(fd != NULL){
         while(!feof(fd)){       // conto quante righe sono nel file menu, quindi quanti piatti
-            fgets(aux, 128, fd);
+            fgets(aux, BUFF_DIM, fd);
             n++;
         }
         fclose(fd);
     }
-    n--;        // nel qhile si conta una riga in più
+    n--;        // nel while si conta una riga in più
     return n;
 }
 
-void riempi_pasto(struct consumazione *add, int num_piatti){
+void pasto_ini(struct consumazione *add, int num_piatti){
     FILE *fd;
     char piatto[4];
-    int prezzo, i;
+    int prezzo, j;
 
     fd = fopen("menu.txt", "r");
     if(fd != NULL){
-        for(i = 0; i < num_piatti ; i++){      
+        for(j = 0; j < num_piatti ; j++){      
             fscanf(fd, "%s", piatto);   // leggo il codice del piatto
             while(fgetc(fd) != '\n'){}  // mi sposto in fondo alla riga
             fseek(fd, -1, SEEK_CUR);
-            fseek(fd, -sizeof(int), SEEK_CUR);  // riposiziono il puntatore prima della cifra (prezzo nel menù) per leggerla
+            fseek(fd, -2, SEEK_CUR);  // riposiziono il puntatore prima della cifra (prezzo nel menù) per leggerla
             fscanf(fd, "%d", &prezzo);
             
-            strcpy(add[i].dish, piatto);
-            add[i].cost = prezzo;
-            add[i].quantity = 0;
+            strcpy(add[j].dish, piatto);
+            add[j].cost = prezzo;
+            add[j].quantity = 0;
             
         }
         fclose(fd);
     }
 }
 
-char* format_comanda(char *st, struct consumazione *add, int num_piatti){
+void formato_comanda(char *st, struct consumazione *add, int num_piatti){
     int num;
     char piatto[4];
-    char aux[BUFF_DIM];
-    int parziale[num_piatti];   // quantità di piatti ordinati nella comanda
     int count, ret, i;
 
-    for(i = 0; i< num_piatti; i++){
-        parziale[i] =0;
-    }
+printf("In format com: %s", st);
+
     count = 0;
-    ret = 0;
-    while(1){
-        sscanf(st + count, "%s-%d %n", piatto, &num, &ret);
-        count += ret;
-        if(st[count] == '\n'){
-            break;
+    ret = -1;       // Incremento subito all'inizio del while, perché ret incrementa di 2  per ogni piatto
+                    // ma se incontra '\n' deve uscire
+    while(st[ret] != '\n'){     // parsing della stringa carattere per carattere
+        count = 0;
+        ret++;
+        while(st[ret] != '-'){ // leggo codice piatto
+            piatto[count] = st[ret];
+            count++;
+            ret++;
         }
+        ret++;
+        piatto[count] = '\0';
+        num = st[ret] - 48; // quantità da ASCII a int
+        ret++;
         for(i=0; i < num_piatti; i++){      // cerco il piatto per aumentarne la quantità ordinata
             if(!strcmp(piatto, add[i].dish)){
                 add[i].quantity += num;    // aumento la quantità nell'ordine totale
-                parziale[i] += num;            // aumento la quantità della comanda
             }
         }
     }
-    ret = 0;
-    count = 0;
-    for(i = 0; i < num_piatti; i++){
-            if(parziale[i]!=0 && count == 0){       // prima volta dentro l'if(no _)
-                ret = sprintf(aux+count, "%s-%d", add[i].dish, parziale[i]);
-                count += ret;
-            }
-            if(parziale[i]!=0 && count != 0){       // volte successive nell'if(si _)
-                ret = sprintf(aux+count, "_%s-%d", add[i].dish, parziale[i]);
-                count += ret;
-            }
-    }   // alla fine del for la comanda sarà nella forma com1-quant1_com2-quant2... in una singola stringa e ordinate con da menù
-    sprintf(st, "%s", aux);
-    return st;
 }
 
 
@@ -164,13 +153,13 @@ int main (int argnum, char** arg) {
 
 
 
-    printf("--------------- BENVENUTI AL RISTORANTE DA NONNA PINA ---------------");
+    printf("--------------- BENVENUTI AL RISTORANTE DA NONNA PINA -------------");
     while(1){   // controllo che il codice di prenotazione inserito sia valido
         printf("Prego inserire il numero della prenotazione:\n");
         scanf("%d", &cod_pren);
         fflush(stdin);
         if(cod_pren <= 2000){       // per costruzione del servizio i codici di prenotazione saranno tutti > 2000
-            printf(" XX Codice prenotazione inserito non valido, si prega di riprovare\n\n");
+            printf("Codice prenotazione inserito non valido, si prega di riprovare\n\n");
             continue;
         }
 
@@ -180,7 +169,7 @@ int main (int argnum, char** arg) {
                                                             // 0 se cod prenotazione non valido
                                                             // MAX_TABLE + 1 (>MAX_TABLE) se codice già usato su altro tb_device
         tb_num = ntohs(tb_num);
-printf("Valore ricevuto: %d", tb_num);
+
         if(tb_num == 0){
             printf("Codice prenotazione inserito non valido, si prega di riprovare\n\n");
         }else{
@@ -193,35 +182,43 @@ printf("Valore ricevuto: %d", tb_num);
             }
         }
     }
+    cod_pren = ntoh(cod_pren);
     sprintf(file_comande, "ordini%d.txt", cod_pren);   // ogni table device ha un proprio file di comande in base al codice di prenotazione
 
     f_menu = fopen("menu.txt", "r");
     if(f_menu != NULL){  
-        char c;     // carattere di appoggio per leggere il file menù
-        int i = 0;  
+        char c;
+        int j = 0;  
         while(!feof(f_menu)){       // copio il contenuto del file menù nella variabile
             c = fgetc(f_menu);
             if(c == EOF){
                 break;
             }
-            menu[i] = c; 
-            i++;
+            menu[j] = c; 
+            j++;
         }
         fclose(f_menu);
     }else{
-        printf("File con menù assente\n");  // no menu no comande da inviare
+        printf("File menù assente\n");  // no menu no comande da inviare
         close(sd);
         exit(1);
     }
+    fflush(stdout);
     printf("\t--- Menù del giorno ---\n");
     printf("%s\n", menu);
 
-    riempi_pasto(pasto, n_piatti);      // nella struttura assegno a ogni piatto il proprio prezzo e inizializzo la quantità a 0;
+    pasto_ini(pasto, n_piatti);      // nella struttura assegno a ogni piatto il proprio prezzo e inizializzo la quantità a 0;
 
+    {   int jj;
+        for(jj = 0; jj < n_piatti; jj++){
+            printf("Piatti:\n%s %d %d\n", pasto[jj].dish, pasto[jj].cost, pasto[jj].quantity);
+        }
+    }
     printf("\nhelp -> specifiche comandi\n");
     printf("menu -> mostra il menù dei piatti\n");
     printf("comanda -> invia una comanda\n");
     printf("conto  -> chiede il conto\n\n");
+
 
     while(1){
         int i=0;
@@ -234,26 +231,29 @@ printf("Valore ricevuto: %d", tb_num);
                     
                     memset(buffer, '\0', BUFF_DIM);
                     fgets(buffer, BUFF_DIM, stdin);
+                    fflush(stdin);
                     sscanf(buffer, "%s", option);
 
                     if(!strcmp(option, "menu")){
                         printf("\t--- Menù del giorno ---\n"); 
                         printf("%s\n", menu);
+
                     }else if(!strcmp(option, "comanda")){
+
                         struct ordine nuova_comanda;
                         uint16_t msg_dim, msg_dim_net;
                         int count = 0;
-
+        printf("Sono in comanda... %s\n", buffer);    
                         order_count++;  // incremento il numero di comande eseguite sul device
                         sscanf(buffer, "%s %n", option, &count);
-
-                        strcpy(buffer, format_comanda(buffer+count, pasto, n_piatti));
-                printf("%s\n", buffer);
+        printf("count: %d\n", count);
+                        formato_comanda(buffer+8/*count dovrebbe valere 8-->'comanda '*/, pasto, n_piatti);
+        printf("%s\n", buffer);
                         sprintf(nuova_comanda.id, "com%d", order_count);    // assegno un codice incrementale alla comanda eseguita
                         sprintf(nuova_comanda.order, "%s", buffer);         // ricopio la comanda nel formato definito
                         nuova_comanda.status = 'a';                         // attribuisco alla comanda lo stato di attesa
                         comande = fopen(file_comande, "a");
-                        fprintf(comande, "%s %s %d\n", nuova_comanda.id, nuova_comanda.order, nuova_comanda.status);
+                        fprintf(comande, "%s %s %c\n", nuova_comanda.id, nuova_comanda.order, nuova_comanda.status);
                         fclose(comande);
 
                         msg_dim = sizeof(nuova_comanda.order);
@@ -265,7 +265,48 @@ printf("Valore ricevuto: %d", tb_num);
 
                         
                     }else if(!strcmp(option, "conto")){
-                        // codice conto
+
+                        // controllo che tutte le comande siano servite
+                        FILE *check;
+                        int end_service = 1;
+                        check = fopen(file_comande, "r");
+                        if(check != NULL){
+                            char stat;
+                            while(!feof(check)){
+                                fscanf(check, "%*s %*s %c", &stat);
+                                if(stat != 's'){        // esiste almeno una comanda non servita ==> Servizio non terminato
+                                    end_service = 0;
+                                    break;
+                                }
+                            }
+                            fclose(check);
+                        }else{
+                            printf("File %s assente\n", file_comande);
+                        }
+
+                        if(end_service){                        
+                            int j;
+                            int tot = 0, parziale= 0;
+                            for(j = 0; j< n_piatti; j++){
+                                if(pasto[j].quantity != 0){
+                                    parziale = pasto[j].cost*pasto[j].quantity;
+                                    printf("%s  %d  %d\n", pasto[j].dish, pasto[j].quantity, parziale);
+                                    tot += parziale;
+                                }
+                            }
+                            printf("Totale: %d", tot);
+
+                            // Avvio spegnimento del td
+                            close(sd);
+                            FD_CLR(sd, &master_r);
+                            FD_CLR(fileno(stdin), &master_r);
+                            exit(0);
+                        }else{
+                            printf("Comande ancora in attesa o preparazione, si prega di richiedere il conto a fine servizio\n");
+                        }
+
+
+
                     }else if(!strcmp(option, "help")){
                         
                         char command[8];
@@ -280,7 +321,7 @@ printf("Valore ricevuto: %d", tb_num);
                             printf("Il comando %s richiede il conto\n", command);
                         }
                     }else{
-                        printf("Comando inserito non valido\n\n");
+                        printf("Comando inserito non valido ma anche comanda\n\n");
                     }
                 }else if(i == sd){  // notifica sulle comande dal server
                     recv(sd, (void*)buffer, 10, 0);
