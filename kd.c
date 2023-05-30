@@ -156,17 +156,14 @@ int main (int argnum, char** arg) {
                         if(valid_order){    // comunico a server, e td, l'ordine in servizio
                             char ready[9];
                             sprintf(ready, "%s %s", settb, setcom);
+                            
                             msg_to_srv = strlen(ready) + 1;
                             msg_to_srv = htons(msg_to_srv);
-
                             send(sd, (void*)&msg_to_srv, sizeof(uint16_t), 0);
                             msg_to_srv = ntohs(msg_to_srv);
                             send(sd, (void*)ready, msg_to_srv, 0);
-
-                            recv(sd, (void*)buffer, 20, 0); // attendo conferma da server
-                            printf("%s\n", buffer);
-
-
+                            // attendo conferma da server come codice 69420
+                        
                         }else{
                             printf("Ordine: %s-%s non esistente\n", settb, setcom);
                         }
@@ -200,11 +197,13 @@ int main (int argnum, char** arg) {
                         exit(0);
                     }
                     from_srv = ntohs(from_srv);
-    printf("value from srv: %d\n", from_srv);                
-                    if(from_srv == 2000){
+    printf("value from srv: %d\n", from_srv);    
+                    if(from_srv == 65535){
+                        printf("COMANDA IN SERVIZIO\n");
+                    }else if(from_srv == 2000){
                         on_hold = 0;
                         printf("Non sono presenti comande da accettare");
-                    }else if(from_srv > 2000){
+                    }else if(from_srv > 2000 && from_srv != 65535){
                         on_hold = from_srv - 2000;
                         for(j =0; j < on_hold; j++){
                             printf("*");    // mostro tante * quante le comande in attesa di preparazione

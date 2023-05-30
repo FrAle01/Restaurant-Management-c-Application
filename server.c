@@ -459,8 +459,8 @@ int main (int argnum, char** arg) {
 
                             kd_value = ntohs(kd_value);
                             if(kd_value == 1){      // kitchen ha eseguito una take --> invio comanda in attesa da più tempo
-                            struct comanda accepted_com;
-                            int tb_fd;
+                                struct comanda accepted_com;
+                                int tb_fd;
                                 comande = fopen("ordinations.txt", "r+");
                                 if(comande != NULL){
                                     char bufferk[BUFF_DIM];
@@ -472,7 +472,9 @@ int main (int argnum, char** arg) {
                                         if(bufferk[kbuf_len-2] == 'a'){     // comanda in attesa -> la invio al kd
                                             char temp_buf[BUFF_DIM];
                 printf("comanda attesa:%s -- %c\n", bufferk, bufferk[kbuf_len-2]);
-                                            bufferk[kbuf_len-2] = '\n';      // metto nel buffer lo stato preparazione  
+                                            bufferk[kbuf_len-2] = '\n';      // rimuovo lo stato dal messaggio a kd
+                                            bufferk[kbuf_len-3] = '\n';      // rimuovo lo spazio tra comanda e stato per il msg  
+                                              
                                             fseek(comande, -2, SEEK_CUR);   // metto il puntatore nel file davanti allo stato
                                             fprintf(comande, "p");          // metto la stato preparazione anche nel file
 
@@ -500,6 +502,36 @@ int main (int argnum, char** arg) {
 
                             }
                             if(kd_value > 1){   // kd_value rappresenterà la dim del messaggio dal kd (messaggio di comanda in servizio) 
+                                char temp_buf[BUFF_DIM];
+                                struct comanda ready_com;
+                                int tb_fd;
+                                uint16_t ready_ok;
+                                recv(i, (void*)temp_buf, kd_value, 0);
+                                sscanf(temp_buf, "%s %s", ready_com.tbl, ready_com.orderId);
+                                tb_fd = tbtosock(ready_com.tbl);
+                                sprintf(temp_buf, "%s s", ready_com.orderId);
+                                send(tb_fd, (void*)temp_buf, STAT_UPDATE_DIM, 0);   // notifico il td della comanda in servizio
+                                
+                                comande = fopen("ordinations.txt", "r+");       // aggiorno lo stato della comanda nel file                                
+                                if(comande != NULL){
+                                    char bufferk[BUFF_DIM];
+                                    int kbuf_len;
+                                    struct comanda current_com;
+                                    while(!feof(comande)){
+                                        fscanf(comande,"%s %s", current_com.tbl, current_com.orderId);
+                                        kbuf_len = strlen(bufferk);
+                                        fgets(bufferk, BUFF_DIM, comande);      // posiziono puntatore in fondo riga
+                                        if(!strcmp(current_com.tbl, ready_com.tbl) && !strcmp(current_com.orderId, ready_com.orderId)){     // trovo comanda da aggiornare
+                printf("comanda:%s, stato prec: %c\n", current_com.tbl, bufferk[kbuf_len-2]);            
+                                            fseek(comande, -2, SEEK_CUR);   // metto il puntatore nel file davanti allo stato
+                                            fprintf(comande, "s");          // metto la stato preparazione anche nel file
+                                            break;
+                                        }
+                                    }
+                                    fclose(comande);
+                                }
+                                ready_ok = htons(65535);
+                                send(i, (void*)&ready_ok, sizeof(uint16_t), 0);  // invio conferma ricezione comanda in servizio
 
                             }
 
