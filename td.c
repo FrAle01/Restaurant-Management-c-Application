@@ -82,10 +82,8 @@ int inMenu(char * piatto, struct consumazione *add, int num_piatti){        // c
 void formato_comanda(char *st, struct consumazione *add, int num_piatti){
     int num;
     char piatto[4];
-    char c_num[2];
+    char c_num[3];
     int count, ret, j;
-
-printf("In format com: %s", st);
 
     count = 0;
     ret = -1;       // Incremento subito all'inizio del while, perché ret incrementa di 2  per ogni piatto
@@ -130,7 +128,7 @@ int main (int argnum, char** arg) {
 
     int sd, ret;
     struct sockaddr_in server_addr;
-    char buffer[1024];
+    char buffer[BUFF_DIM];
     char option[8];
     int port;
     char menu[MENU_DIM];                    // variabile che conterrà il menù letto dal file
@@ -154,7 +152,7 @@ int main (int argnum, char** arg) {
     FD_ZERO(&master_r); // pulizia insiemi di descrittori    
     FD_ZERO(&read_fds); // pulizia insiemi di descrittori  
 
-    port = (argnum == 2) ? atoi(arg[1]) : 4242;             // usiamo 4242 come porta di default se non viene specificata all'esecuzione
+    port = 4242;        //(argnum == 2) ? atoi(arg[1]) : 4242 
 
     sd = socket(AF_INET, SOCK_STREAM, 0);   // creazione socket
 
@@ -178,10 +176,9 @@ int main (int argnum, char** arg) {
 
 
 
-    while(1){   // controllo che il codice di prenotazione inserito sia valido
+    while(1){   // [LOGIN] => controllo che il codice di prenotazione inserito sia valido 
         printf("Inserire il numero della prenotazione:\n");
         scanf("%d", &cod_pren);
-        fflush(stdin);
         if(cod_pren <= 2000){       // per costruzione del servizio i codici di prenotazione saranno tutti > 2000
             printf("Codice prenotazione inserito non valido, si prega di riprovare\n\n");
             continue;
@@ -206,6 +203,7 @@ int main (int argnum, char** arg) {
             }
         }
     }
+    
     cod_pren = ntohs(cod_pren);
     sprintf(file_comande, "ordini%d.txt", cod_pren);   // ogni table device ha un proprio file di comande in base al codice di prenotazione
 
@@ -240,7 +238,6 @@ int main (int argnum, char** arg) {
     printf("comanda -> invia una comanda\n");
     printf("conto  -> chiede il conto\n\n");
 
-
     while(1){
         int i=0;
 
@@ -252,7 +249,7 @@ int main (int argnum, char** arg) {
                     
                     memset(buffer, '\0', BUFF_DIM);
                     fgets(buffer, BUFF_DIM, stdin);
-                    fflush(stdin);
+    printf("in: %s\n", buffer);
                     sscanf(buffer, "%s", option);
 
                     if(!strcmp(option, "menu")){
@@ -268,16 +265,9 @@ int main (int argnum, char** arg) {
                         order_count++;  // incremento il numero di comande eseguite sul device
                         sscanf(buffer, "%s %n", option, &count);
 
-                        formato_comanda(buffer+count, pasto, n_piatti);
-
-        {
-            for(jj = 0; jj<n_piatti; jj++){
-                printf("%s %d\n", pasto[jj].dish, pasto[jj].quantity);
-            }
-        }        
+                        formato_comanda(buffer+count, pasto, n_piatti);      
             
                         sprintf(nuova_comanda.id, "com%d", order_count);    // assegno un codice incrementale alla comanda eseguita
-        printf("%s\n", buffer);
 
                         for(jj = 0; buffer[count + jj]!='\n'; jj++){         // ricopio l'ordine, escludendo il comando 
                             nuova_comanda.order[jj] = buffer[count + jj];
@@ -293,9 +283,7 @@ int main (int argnum, char** arg) {
                         msg_dim_net = htons(msg_dim);
                         send(sd, (void*)&msg_dim_net, sizeof(uint16_t), 0); // comunico la dimensione del messaggio
                         send(sd, (void*)buffer, msg_dim, 0);   // comunico l'ordine al server
-
-                        recv(sd, (void*)buffer, 17, 5);     // attendo la conferma di 'COMANDA RICEVUTA' da server
-                        printf("%s\n", buffer);
+                        // attendo la conferma di 'COMANDA RICEVUTA' da server
                         
                     }else if(!strcmp(option, "conto")){
 
@@ -360,21 +348,26 @@ int main (int argnum, char** arg) {
                             printf("Il comando %s richiede il conto\n", command);
                         }
                     }else{
-                        printf("Comando inserito non valido ma anche comanda\n\n");
+                        printf("Comando inserito non valido\n\n");
                     }
                 }else if(i == sd){  // notifica sulle comande dal server
-                    char from_srv[5];
+                    char from_srv[9];
+                    int ii;
                     memset(buffer, '\0', BUFF_DIM);
-                    recv(sd, (void*)buffer, STAT_COMM, 0);
-
-                    sscanf(buffer, "%s", from_srv);
-
-                    if(!strcmp(from_srv, "exit")){    // avvio procedura disconnessione
-
+                    ii = recv(sd, (void*)buffer, STAT_COMM, 0);
+    printf("da srv: %s\n", buffer);
+                    if(ii == 0){    // avvio spegnimento td
                         close(sd);
                         FD_CLR(sd, &master_r);
                         FD_CLR(fileno(stdin), &master_r);
                         exit(0);
+                    }
+
+                    sscanf(buffer, "%s", from_srv);
+
+                    if(!strcmp(from_srv, "RICEVUTA")){    // avvio procedura disconnessione
+                        printf("COMANDA RICEVUTA\n", buffer);
+                        
 
                     }else{      // aggiorno lo stato della comanda
                         char new_status;

@@ -12,7 +12,7 @@
 #include <time.h>
 
 #define BUFF_DIM 1024
-#define MSG_DIM 48 // 49 = 1 (codice operazione) + 25 (max caratteri per nome) + 3 (max cifre per posti prenotazione)
+#define MSG_DIM 49 // 49 = 1 (codice operazione) + 25 (max caratteri per nome) + 3 (max cifre per posti prenotazione)
                    //       + 4 (char per tavolo) + 8 (char data) + 2 (cifre ora) + 6 (spazi + fine stringa)
 #define MAX_TABLE 3 // indica il numero massimo di tavoli disponibili (nel nostro ristorante ne abbiamo 3)
 
@@ -70,14 +70,14 @@ int main (int argnum, char** arg) {
     struct sockaddr_in server_addr;
     char buffer[BUFF_DIM];
     char option[5]; // conterrà i comandi scritti sullo stdin
-    int port; // porta del server, se specificata a esecuzione client, 4242 i default
+    int port;       // porta del server, se specificata a esecuzione client, 4242 i default
     
     struct booking req; // struttura per costuire la richiesta di prenotazione al server
-    char code; // codice di protocollo per segnalare al server l'operazione in esecuzione
-    char device = 'C'; // 'C' = client prenotazione, 'T' = table device, 'K' = kitchen device
-    int find_done = 0; // Variabile per impedire di eseguire una book prima di aver eseguito una find
+    char code;          // codice di protocollo per segnalare al server l'operazione in esecuzione
+    char device = 'C';  // 'C' = client prenotazione, 'T' = table device, 'K' = kitchen device
+    int find_done = 0;  // Variabile per impedire di eseguire una book prima di aver eseguito una find
 
-    port = (argnum == 2) ? atoi(arg[1]) : 4242;       // usiamo 4242 come porta di default se non viene specificata all'esecuzione
+    port = 4242;        //(argnum == 2) ? atoi(arg[1]) : 4242;       (usiamo 4242 come porta di default se non viene specificata all'esecuzione)
     
     sd = socket(AF_INET, SOCK_STREAM, 0); // creazione socket
 
