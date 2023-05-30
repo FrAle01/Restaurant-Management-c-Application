@@ -45,9 +45,9 @@ struct tavolo tav[MAX_TABLE];       // tavoli presenti nel ristorante
 int sock_tb[MAX_TABLE];             // array associativo TavoloId <-> socket
 
 struct comanda{
-    char orderId[5];    // codice comanda
     char tbl[4];        // codice tavolo
-    int tableFD;        // socket del tavolo (per notificare stato comanda)
+    char orderId[5];    // codice comanda
+    // int tableFD;        // socket del tavolo (per notificare stato comanda)
     char order[75];     // comanda effettiva
     char status;        // stato comanda ('a' in attesa, 'p' in preparazione, 's' in servizio)
 };
@@ -129,6 +129,7 @@ int main (int argnum, char** arg) {
     FILE *devices;      // file dei dispositivi
     FILE *tavoli;       // file dei tavoli del ristorante
     FILE *prenotazioni; // file prenotazioni confermate
+    FILE *comande;      // file comande da tutti i td
 
     FD_ZERO(&master_r); // pulizia insiemi di descrittori    
     FD_ZERO(&read_fds); // pulizia insiemi di descrittori   
@@ -390,6 +391,22 @@ int main (int argnum, char** arg) {
                                 memset(buffer, '\0', BUFF_DIM);         // pulizia buffer
                                 recv(i, (void*)buffer, td_value, 0);    // ricevo la comanda
                     printf("%s \n", buffer);
+
+                                comande = fopen("ordinations.txt", "a+");
+                                if(comande != NULL){
+                                    int tb_cd;
+                                    char from_tb[4];
+                                    tb_cd = socktotb(i);
+                                    sprintf(from_tb, "T%d", tb_cd);
+                                    fprintf(comande, "%s %s a\n", from_tb, buffer);
+
+                                    fclose(comande);
+                                }
+
+                                sprintf(buffer, "COMANDA RICEVUTA\n");
+                                send(i, (void*)buffer, 17, 0);
+
+                                
 
                             }
 

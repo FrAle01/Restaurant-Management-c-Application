@@ -68,11 +68,22 @@ void pasto_ini(struct consumazione *add, int num_piatti){
         fclose(fd);
     }
 }
+int inMenu(char * piatto, struct consumazione *add, int num_piatti){        // controlla che un codice piatto sia effettivamente ne menu
+                                                                            // ritorna l'indice del piatto nell'array, -1 altrimenti
+    int jj;
+    for(jj = 0; jj < num_piatti; jj++){
+        if(!strcmp(piatto, add[jj].dish)){
+                return jj;    // il piatto è presente nel menu
+            }
+    }
+    return -1;
+}
 
 void formato_comanda(char *st, struct consumazione *add, int num_piatti){
     int num;
     char piatto[4];
-    int count, ret, i;
+    char c_num[2];
+    int count, ret, j;
 
 printf("In format com: %s", st);
 
@@ -89,13 +100,27 @@ printf("In format com: %s", st);
         }
         ret++;
         piatto[count] = '\0';
-        num = st[ret] - 48; // quantità da ASCII a int
-        ret++;
-        for(i=0; i < num_piatti; i++){      // cerco il piatto per aumentarne la quantità ordinata
+        count = 0;
+        while(st[ret] != ' ' && st[ret] != '\n'){   // leggo la quantità
+            c_num[count] = st[ret];
+            count++;
+            ret++;
+        }
+        c_num[count] = '\0';
+        num = atoi(c_num); // - 48; // quantità da ASCII a int
+
+        // ret++;
+        j = inMenu(piatto, add, num_piatti);
+        if(j < 0){      // piatto non in menu
+            printf("Piatto %s non in menu\n", piatto);
+        }else{          // aumento la quantità dei piatti ordinati
+            add[j].quantity += num;
+        }
+        /*for(i=0; i < num_piatti; i++){      // cerco il piatto per aumentarne la quantità ordinata
             if(!strcmp(piatto, add[i].dish)){
                 add[i].quantity += num;    // aumento la quantità nell'ordine totale
             }
-        }
+        }*/
     }
 }
 
@@ -153,9 +178,8 @@ int main (int argnum, char** arg) {
 
 
 
-    printf("--------------- BENVENUTI AL RISTORANTE DA NONNA PINA -------------");
     while(1){   // controllo che il codice di prenotazione inserito sia valido
-        printf("Prego inserire il numero della prenotazione:\n");
+        printf("Inserire il numero della prenotazione:\n");
         scanf("%d", &cod_pren);
         fflush(stdin);
         if(cod_pren <= 2000){       // per costruzione del servizio i codici di prenotazione saranno tutti > 2000
@@ -182,7 +206,7 @@ int main (int argnum, char** arg) {
             }
         }
     }
-    cod_pren = ntoh(cod_pren);
+    cod_pren = ntohs(cod_pren);
     sprintf(file_comande, "ordini%d.txt", cod_pren);   // ogni table device ha un proprio file di comande in base al codice di prenotazione
 
     f_menu = fopen("menu.txt", "r");
@@ -203,17 +227,14 @@ int main (int argnum, char** arg) {
         close(sd);
         exit(1);
     }
+
     fflush(stdout);
+    printf("-------------- BENVENUTI ------------\n");
     printf("\t--- Menù del giorno ---\n");
     printf("%s\n", menu);
 
     pasto_ini(pasto, n_piatti);      // nella struttura assegno a ogni piatto il proprio prezzo e inizializzo la quantità a 0;
 
-    {   int jj;
-        for(jj = 0; jj < n_piatti; jj++){
-            printf("Piatti:\n%s %d %d\n", pasto[jj].dish, pasto[jj].cost, pasto[jj].quantity);
-        }
-    }
     printf("\nhelp -> specifiche comandi\n");
     printf("menu -> mostra il menù dei piatti\n");
     printf("comanda -> invia una comanda\n");
@@ -242,42 +263,60 @@ int main (int argnum, char** arg) {
 
                         struct ordine nuova_comanda;
                         uint16_t msg_dim, msg_dim_net;
-                        int count = 0;
-        printf("Sono in comanda... %s\n", buffer);    
+                        int count = 0, jj;
+
                         order_count++;  // incremento il numero di comande eseguite sul device
                         sscanf(buffer, "%s %n", option, &count);
-        printf("count: %d\n", count);
-                        formato_comanda(buffer+8/*count dovrebbe valere 8-->'comanda '*/, pasto, n_piatti);
-        printf("%s\n", buffer);
+
+                        formato_comanda(buffer+count, pasto, n_piatti);
+
+        {
+            for(jj = 0; jj<n_piatti; jj++){
+                printf("%s %d\n", pasto[jj].dish, pasto[jj].quantity);
+            }
+        }        
+            
                         sprintf(nuova_comanda.id, "com%d", order_count);    // assegno un codice incrementale alla comanda eseguita
-                        sprintf(nuova_comanda.order, "%s", buffer);         // ricopio la comanda nel formato definito
-                        nuova_comanda.status = 'a';                         // attribuisco alla comanda lo stato di attesa
-                        comande = fopen(file_comande, "a");
+        printf("%s\n", buffer);
+
+                        for(jj = 0; buffer[count + jj]!='\n'; jj++){         // ricopio l'ordine, escludendo il comando 
+                            nuova_comanda.order[jj] = buffer[count + jj];
+                        }
+                        nuova_comanda.order[jj] = '\0';
+                        sprintf(buffer, "%s %s", nuova_comanda.id, nuova_comanda.order);   // creo il messaggio per il server
+                        nuova_comanda.status = 'a';                                 // attribuisco alla comanda lo stato di attesa
+                        comande = fopen(file_comande, "a");                         // inserisco la comanda nel file
                         fprintf(comande, "%s %s %c\n", nuova_comanda.id, nuova_comanda.order, nuova_comanda.status);
                         fclose(comande);
 
-                        msg_dim = sizeof(nuova_comanda.order);
+                        msg_dim = strlen(buffer)+ 1;
                         msg_dim_net = htons(msg_dim);
                         send(sd, (void*)&msg_dim_net, sizeof(uint16_t), 0); // comunico la dimensione del messaggio
-                        send(sd, (void*)nuova_comanda.order, msg_dim, 0);   // comunico l'ordine al server
+                        send(sd, (void*)buffer, msg_dim, 0);   // comunico l'ordine al server
 
-
-
+                        recv(sd, (void*)buffer, 17, 5);     // attendo la conferma di 'COMANDA RICEVUTA' da server
+                        printf("%s\n", buffer);
                         
                     }else if(!strcmp(option, "conto")){
 
                         // controllo che tutte le comande siano servite
                         FILE *check;
                         int end_service = 1;
+                        char temp_buf[BUFF_DIM];
                         check = fopen(file_comande, "r");
                         if(check != NULL){
                             char stat;
+                            int line_dim;
                             while(!feof(check)){
-                                fscanf(check, "%*s %*s %c", &stat);
+                                fgets(temp_buf, BUFF_DIM, check);   // leggo la riga
+                                line_dim = strlen(temp_buf);
+                                stat = temp_buf[line_dim-2];        // controllo il penulmtimo carattere della riga (ultimo è \n)
+
                                 if(stat != 's'){        // esiste almeno una comanda non servita ==> Servizio non terminato
                                     end_service = 0;
                                     break;
                                 }
+
                             }
                             fclose(check);
                         }else{
@@ -294,7 +333,7 @@ int main (int argnum, char** arg) {
                                     tot += parziale;
                                 }
                             }
-                            printf("Totale: %d", tot);
+                            printf("Totale: %d\n", tot);
 
                             // Avvio spegnimento del td
                             close(sd);
@@ -324,14 +363,47 @@ int main (int argnum, char** arg) {
                         printf("Comando inserito non valido ma anche comanda\n\n");
                     }
                 }else if(i == sd){  // notifica sulle comande dal server
-                    recv(sd, (void*)buffer, 10, 0);
+                    char from_srv[5];
+                    memset(buffer, '\0', BUFF_DIM);
+                    recv(sd, (void*)buffer, STAT_COMM, 0);
+
+                    sscanf(buffer, "%s", from_srv);
+
+                    if(!strcmp(from_srv, "exit")){    // avvio procedura disconnessione
+
+                        close(sd);
+                        FD_CLR(sd, &master_r);
+                        FD_CLR(fileno(stdin), &master_r);
+                        exit(0);
+
+                    }else{      // aggiorno lo stato della comanda
+                        char new_status;
+                        sscanf(buffer, "%s %c", from_srv, &new_status);    
+                        comande = fopen(file_comande, "r+");
+                        if(comande != NULL){
+                            char temp_buf[BUFF_DIM];
+                            char current_com[5];
+                            while(!feof(comande)){
+                                fscanf(comande, "%s", current_com);
+                                if(!strcmp(current_com, from_srv)){
+                                    fgets(temp_buf, BUFF_DIM, comande); // porto puntatore in forndo alla riga
+                                    fseek(comande, -2, SEEK_CUR);
+                                    fprintf(comande, "%c", new_status);
+                                    break;
+                                }
+                                fgets(temp_buf, BUFF_DIM, comande); // porto puntatore in forndo alla riga
+                            }
+                        fclose(comande);
+                        }
+                        if(new_status == 'p'){
+                            printf("%s IN PREPARAZIONE\n", from_srv);
+                        }else if(new_status == 's'){
+                            printf("%s IN SERVIZIO\n", from_srv);
+                        }
+                    }                                     
                 }
             }
-        }
-        
-    }
-        
-
-    
+        } 
+    } 
     exit(0);
 }
