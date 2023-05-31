@@ -17,6 +17,12 @@
 #define CL_DIM 49 // dim messaggio protocollo con cliente prenotazione
 #define STAT_UPDATE_DIM 8
 
+#define ORDINATIONS "ordinations.txt"
+#define CONN_DEVICES "devices.txt"
+#define RESERVATIONS "reservation.txt"
+#define TABLES "tables.txt"
+
+
 
 struct booked{
     char date[8+1];
@@ -48,7 +54,7 @@ int sock_tb[MAX_TABLE];             // array associativo TavoloId <-> socket
 struct comanda{
     char tbl[4];        // codice tavolo
     char orderId[5];    // codice comanda
-    char order[75];     // comanda effettiva
+    char ordered[75];     // comanda effettiva
     char status;        // stato comanda ('a' in attesa, 'p' in preparazione, 's' in servizio)
 };
 
@@ -108,7 +114,7 @@ int socktotb(int sock){         // dato un socket restituisce, se esiste, il cod
 void broadcat_kd(uint16_t orders, int exeption){
     FILE *dvcs;
     struct device devk;
-    dvcs = fopen("devices.txt", "r");        // comunico a tutti gli altri kd che una comanda è stata accettata
+    dvcs = fopen(CONN_DEVICES, "r");        // comunico a tutti gli altri kd che una comanda è stata accettata
     if(dvcs != NULL){
         while(!feof(dvcs)){
             fscanf(dvcs, "%d %c %*s", &devk.fd, &devk.type);
@@ -123,6 +129,65 @@ void broadcat_kd(uint16_t orders, int exeption){
         }
         fclose(dvcs);
     }
+}
+
+char* statostr(char letter){
+    switch(letter){
+        case 'a':
+            return "<in attesa>\0";
+        break;
+        case 'p':
+            return "<in preparazione>\0";
+        break;
+        case 's':
+            return "<in servizio>\0";
+        break;
+        default:
+            return "!STATO non riconosciuto!\0";
+        break;
+    }
+
+}
+
+void printOrder(char* ord, char* tab, char* comId, char st, char all){
+    int count = 0;
+    int ret = -1;
+    char piatto[4];
+    char c_num[3];
+    int num;    
+
+    if(all){
+        printf("%s %s %s\n", comId, tab, statostr(st));
+    }
+    if(st == ' ' && !all){
+        printf("%s %s\n", comId, tab);
+    }
+    if (!strcmp(tab, " ") && !all){
+        printf("%s %s\n", comId, statostr(st));
+    }
+
+    while(ord[ret] != '\n'){     // parsing della stringa carattere per carattere
+        count = 0;
+        ret++;
+        while(ord[ret]!= '-'){ // leggo codice piatto
+            piatto[count] = ord[ret];
+            count++;
+            ret++;
+        }
+        ret++;
+        piatto[count] = '\0';
+        printf("%s ", piatto);
+        count = 0;
+        while(ord[ret] != ' ' && ord[ret] != '\n'){   // leggo la quantità
+            c_num[count] = ord[ret];
+            count++;
+            ret++;
+        }
+        c_num[count] = '\0';
+        num = atoi(c_num);  // quantità da ASCII a int
+        printf("%d\n", num);
+    }
+    fflush(stdout);
 }
 
 int main (int argnum, char** arg) {
@@ -156,12 +221,13 @@ int main (int argnum, char** arg) {
     FD_ZERO(&master_r); // pulizia insiemi di descrittori    
     FD_ZERO(&read_fds); // pulizia insiemi di descrittori   
 
-    tavoli = fopen("tables.txt", "r");  // il file dei tavoli è preesistente e definito dalle caratteristiche del ristorante  
+    tavoli = fopen(TABLES, "r");  // il file dei tavoli è preesistente e definito dalle caratteristiche del ristorante  
     if(tavoli != NULL){
         inserisci_tavoli(tavoli);           // assegno i tavoli esistenti (nel file) alle variabili
         fclose(tavoli); 
     }else{
         printf("File tables.txt non esistente\n");
+        fflush(stdout);
         exit(1);
     }
 
@@ -190,7 +256,21 @@ int main (int argnum, char** arg) {
     FD_SET(fileno(stdin), &master_r);   // metto stdin nell'insieme master
     fdmax = listener;
 
+    // pulizia file
+    fclose(fopen(ORDINATIONS, "w"));
+    fclose(fopen(CONN_DEVICES, "w"));
+    fclose(fopen(RESERVATIONS, "w"));
+
+
+    printf("\nComandi accettati:\n");
+    printf("stat [table|status] -> Mostra comande relative a 'table' o 'status', tutte quelle giornaliere se opzione mancante\n");
+    printf("stop -> avvia procedura di spegnimento a tutti i table e kitchen devices, se tutte le comande sono in stato di servizio\n\n");
+    fflush(stdout);
+
+
     while(1){  
+        printf("> ");
+        fflush(stdout);
         int i=0;
         read_fds = master_r;
         select(fdmax+1, &read_fds, NULL, NULL, NULL);
@@ -208,8 +288,9 @@ int main (int argnum, char** arg) {
                     new_dev.fd = new_sd;
                     inet_ntop(AF_INET, &cl_addr.sin_addr, new_dev.addr, cl_len);
                     // inserisco il device appena collegato nel file dei dispositivi
-        printf("%d %c %s\n", new_dev.fd, new_dev.type, new_dev.addr);
-                    devices = fopen("devices.txt", "a");
+    printf("New connection on fd %d, device type: %c, client IP: %s\n", new_dev.fd, new_dev.type, new_dev.addr);
+    fflush(stdout);
+                    devices = fopen(CONN_DEVICES, "a");
                     fprintf(devices, "%d %c %s\n", new_dev.fd, new_dev.type, new_dev.addr);
                     fclose(devices);
 
@@ -219,7 +300,7 @@ int main (int argnum, char** arg) {
                     char disp=' ';
 
                     // recupero il tipo ti dispositivo collegato al socket interessato
-                    devices = fopen("devices.txt", "r");
+                    devices = fopen(CONN_DEVICES, "r");
                     while(!feof(devices)){
                         fscanf(devices, "%d %c %s", &dev.fd, &dev.type, dev.addr);
                         if (dev.fd == i){
@@ -231,7 +312,7 @@ int main (int argnum, char** arg) {
 
                     switch(disp){
 
-                /*GESTIONE PROTOCOLLO CON CLIENT*/
+/* ----- GESTIONE PROTOCOLLO CON CLIENT ----- */
                         case 'C':
                             memset(buffer, '\0', BUFF_DIM); // pulizia buffer
                             ret = recv(i, (void*)buffer, CL_DIM, 0);
@@ -239,7 +320,7 @@ int main (int argnum, char** arg) {
                                 int line = 0;
                                 close(i);
                                 FD_CLR(i, &master_r);
-                                devices = fopen("devices.txt", "r+");
+                                devices = fopen(CONN_DEVICES, "r+");
                                 while(!feof(devices)){
                                     fscanf(devices, "%d %c %s", &dev.fd, &dev.type, dev.addr);
                                     line++;
@@ -250,8 +331,8 @@ int main (int argnum, char** arg) {
                                     }
                                 }                  
                                 fclose(devices);
-                                remove("devices.txt");
-                                rename("delete.temp", "devices.txt");
+                                remove(CONN_DEVICES);
+                                rename("delete.temp", CONN_DEVICES);
                                 continue;
                             }
                             sscanf(buffer,"%c", &option);
@@ -268,7 +349,7 @@ int main (int argnum, char** arg) {
                                         tav[j].avaiable = 0;                // non disponibili quelli con pochi posti
                                     }
                                 }
-                                prenotazioni = fopen("reservation.txt", "r");
+                                prenotazioni = fopen(RESERVATIONS, "r");
                                 if(prenotazioni != NULL){   // file prenotazioni deve esistere per controllare se ci sono gia prenotazioni effettuate
                                     while(!feof(prenotazioni)){
                                         fscanf(prenotazioni,"%s %02d %s %*d %*s %*d %*s %*d", reserv.date, &reserv.hour, reserv.tb);
@@ -306,7 +387,7 @@ int main (int argnum, char** arg) {
                             }else if(option == 'B'){     // client vuole prenotare
                                 int stillFree = 1;
                                 sscanf(buffer, "%c %s %02d %s %s %d", &option, request.date, &request.hour, request.tb, request.name, &request.seat);
-                                prenotazioni = fopen("reservation.txt", "r");
+                                prenotazioni = fopen(RESERVATIONS, "r");
                                 if(prenotazioni != NULL){ 
                                     while(!feof(prenotazioni)){
                                         fscanf(prenotazioni,"%s %02d %s %*d %*s %*d %*s %*d", reserv.date, &reserv.hour, reserv.tb);
@@ -320,7 +401,7 @@ int main (int argnum, char** arg) {
                                     }
                                     fclose(prenotazioni);
                                 }
-                                prenotazioni = fopen("reservation.txt", "a");
+                                prenotazioni = fopen(RESERVATIONS, "a");
                                 if(stillFree){ // prenotazione possibile, la aggiungo al file
 
                                     get_ts(request.timestamp);          // creo il timestamp per la prenotazione
@@ -334,10 +415,10 @@ int main (int argnum, char** arg) {
                             } 
 
                         break;                    
-                /*FINE GESTIONE PROTOCOLLO CON CLIENT*/
+/* ----- FINE GESTIONE PROTOCOLLO CON CLIENT ----- */
 
 
-                /*GESTIONE PROTOCOLLO CON TABLE DEVICE*/
+/* ----- GESTIONE PROTOCOLLO CON TABLE DEVICE ----- */
                         case 'T':
                             
                             ret = recv(i, (void*)&td_value, sizeof(uint16_t), 0);
@@ -345,7 +426,7 @@ int main (int argnum, char** arg) {
                                 int line = 0, t;
                                 close(i);
                                 FD_CLR(i, &master_r);
-                                devices = fopen("devices.txt", "r+");
+                                devices = fopen(CONN_DEVICES, "r+");
                                 while(!feof(devices)){
                                     fscanf(devices, "%d %c %s", &dev.fd, &dev.type, dev.addr);
                                     line++;
@@ -356,32 +437,33 @@ int main (int argnum, char** arg) {
                                     }
                                 }                  
                                 fclose(devices);
-                                remove("devices.txt");
-                                rename("delete.temp", "devices.txt");
+                                remove(CONN_DEVICES);
+                                rename("delete.temp", CONN_DEVICES);
                                 t = socktotb(i);
                                 sock_tb[--t] = -1;  // rimuovo associazione tavolo da un socket
                                 continue;
                             }
                             td_value = ntohs(td_value);
-                    printf("Da table: %d\n", td_value);
             // Protocollo di login su td --> (tuti i codice prenotazione ricevuti  > 2000)
                             if(td_value > 2000){    // gestione del codice di prenotazione inviato 
-                                prenotazioni = fopen("reservation.txt", "r+");
+            printf("From table: %d\n", td_value);
+                                prenotazioni = fopen(RESERVATIONS, "r+");
                                 if(prenotazioni != NULL){
                                     while(!feof(prenotazioni)){
                                         fscanf(prenotazioni, "%*s %*d %s %d %*s %*d %*s %d", attend.tb, &attend.bookId, &attend.attendance);
-                    printf("%s %d %d\n", attend.tb, attend.bookId, attend.attendance);
                                         if(td_value == attend.bookId && attend.attendance == 0){    // prenotazione esistente e ancora non usata
-
-                    printf("Found %s %d %d\n", attend.tb, attend.bookId, attend.attendance);
                                             uint16_t n_tav;
                                             int ii;
+
+            printf("Found table: %s, on booking id: %d already used(%d)\n", attend.tb, attend.bookId, attend.attendance);
+            fflush(stdout);
                                             sscanf(attend.tb, "T%d", &n_tav);
                                             ii = n_tav - 1;
                                             if(sock_tb[ii] == -1){   //al tavolo ancora non c'è associato un socket
                                                 sock_tb[ii] = i;    // associo il socket 'i' al tavolo
                                             }else{
                                                 printf("Error! Tavolo già in uso\n");
+                                                fflush(stdout);
                                             }
 
                                             n_tav = htons(n_tav);
@@ -392,13 +474,15 @@ int main (int argnum, char** arg) {
                                         }
                                         if(td_value == attend.bookId && attend.attendance == 1){    // prenotazione esistente ma già usata
                                             uint16_t used = MAX_TABLE +1;
+            printf("Found table: %s, on booking id: %d already used(%d)\n", attend.tb, attend.bookId, attend.attendance);
+            fflush(stdout);
                                             used = htons(used);
                                             send(i, (void*)&used, sizeof(uint16_t), 0);
                                             break;
                                         }                                    
                                     }
                                     if(feof(prenotazioni)){ // terminato il file ma non trovata la prenotazione
-                    printf("Prenotazione non trovata\n");
+            printf("Prenotazione non trovata\n");
                                         uint16_t not_found = 0;
                                     //  not_found = htons(not_found);   non necessario perché endianess non importante per 0
                                         send(i, (void*)&not_found, sizeof(uint16_t), 0);
@@ -412,9 +496,10 @@ int main (int argnum, char** arg) {
                                 
                                 memset(buffer, '\0', BUFF_DIM);         // pulizia buffer
                                 recv(i, (void*)buffer, td_value, 0);    // ricevo la comanda
-                    printf("%s \n", buffer);
+            printf("New order from table T%d\n\n", socktotb(i));
+            fflush(stdout);
 
-                                comande = fopen("ordinations.txt", "a+");
+                                comande = fopen(ORDINATIONS, "a+");
                                 if(comande != NULL){
                                     int tb_cd;
                                     char from_tb[4];
@@ -431,17 +516,17 @@ int main (int argnum, char** arg) {
                                 broadcat_kd(w_order, -1);   // notifico i kd della nuova comanda
                             }
                         break;
-                /*FINE GESTIONE PROTOCOLLO CON TABLE DEVICE*/
+/* ----- FINE GESTIONE PROTOCOLLO CON TABLE DEVICE ----- */
 
                     
-                /*GESTIONE PROTOCOLLO CON KITCHEN DEVICE*/
+/* ----- GESTIONE PROTOCOLLO CON KITCHEN DEVICE ----- */
                       case 'K':
                             ret = recv(i, (void*)&kd_value, sizeof(uint16_t), 0);
                             if(!ret){
                                 int line = 0;
                                 close(i);
                                 FD_CLR(i, &master_r);
-                                devices = fopen("devices.txt", "r+");
+                                devices = fopen(CONN_DEVICES, "r+");
                                 while(!feof(devices)){
                                     fscanf(devices, "%d %c %s", &dev.fd, &dev.type, dev.addr);
                                     line++;
@@ -452,8 +537,8 @@ int main (int argnum, char** arg) {
                                     }
                                 }                  
                                 fclose(devices);
-                                remove("devices.txt");
-                                rename("delete.temp", "devices.txt");
+                                remove(CONN_DEVICES);
+                                rename("delete.temp", CONN_DEVICES);
                                 continue;
                             }
 
@@ -461,7 +546,7 @@ int main (int argnum, char** arg) {
                             if(kd_value == 1){      // kitchen ha eseguito una take --> invio comanda in attesa da più tempo
                                 struct comanda accepted_com;
                                 int tb_fd;
-                                comande = fopen("ordinations.txt", "r+");
+                                comande = fopen(ORDINATIONS, "r+");
                                 if(comande != NULL){
                                     char bufferk[BUFF_DIM];
                                     uint16_t kbuf_len, kbuf_len_net;
@@ -471,7 +556,6 @@ int main (int argnum, char** arg) {
                                         kbuf_len = strlen(bufferk);
                                         if(bufferk[kbuf_len-2] == 'a'){     // comanda in attesa -> la invio al kd
                                             char temp_buf[BUFF_DIM];
-                printf("comanda attesa:%s -- %c\n", bufferk, bufferk[kbuf_len-2]);
                                             bufferk[kbuf_len-2] = '\n';      // rimuovo lo stato dal messaggio a kd
                                             bufferk[kbuf_len-3] = '\n';      // rimuovo lo spazio tra comanda e stato per il msg  
                                               
@@ -479,7 +563,8 @@ int main (int argnum, char** arg) {
                                             fprintf(comande, "p");          // metto la stato preparazione anche nel file
 
                                             sprintf(temp_buf, "%s %s%s", accepted_com.tbl, accepted_com.orderId, bufferk);   // costruisco il msg per il kd
-                printf("to kd: %s\n", temp_buf);
+            printf("Comanda accettata da kd: %s\n", temp_buf);
+            fflush(stdout);
                                             kbuf_len =  strlen(temp_buf) +1;
                                             kbuf_len_net = htons(kbuf_len);
                                             send(i, (void*)&kbuf_len_net, sizeof(uint16_t), 0);
@@ -493,9 +578,8 @@ int main (int argnum, char** arg) {
                                 }
                                 memset(buffer, '\0', BUFF_DIM);         // pulizia buffer
                                 tb_fd = tbtosock(accepted_com.tbl);
-                printf("tbl: %s in sock %d", accepted_com.tbl, tb_fd);
+            printf("Notification to table: %s\n", accepted_com.tbl);
                                 sprintf(buffer, "%s p", accepted_com.orderId); // costruisco messaggio per comunicare a td comanda accettata
-                printf("to td: %s\n", buffer);                
                                 send(tb_fd, (void*)buffer, STAT_UPDATE_DIM, 0);// notifico il td della comanda in preparazione
 
                                 broadcat_kd(w_order, i);    // notifico tutti i kd che una comanda è atat accettata, eccetto quello che l'ha accettata
@@ -512,17 +596,19 @@ int main (int argnum, char** arg) {
                                 sprintf(temp_buf, "%s s", ready_com.orderId);
                                 send(tb_fd, (void*)temp_buf, STAT_UPDATE_DIM, 0);   // notifico il td della comanda in servizio
                                 
-                                comande = fopen("ordinations.txt", "r+");       // aggiorno lo stato della comanda nel file                                
+                                comande = fopen(ORDINATIONS, "r+");       // aggiorno lo stato della comanda nel file                                
                                 if(comande != NULL){
                                     char bufferk[BUFF_DIM];
-                                    int kbuf_len;
+                                    int kbuf_len = 0;
                                     struct comanda current_com;
+                                    memset(bufferk, '\0', BUFF_DIM);
                                     while(!feof(comande)){
                                         fscanf(comande,"%s %s", current_com.tbl, current_com.orderId);
                                         kbuf_len = strlen(bufferk);
                                         fgets(bufferk, BUFF_DIM, comande);      // posiziono puntatore in fondo riga
                                         if(!strcmp(current_com.tbl, ready_com.tbl) && !strcmp(current_com.orderId, ready_com.orderId)){     // trovo comanda da aggiornare
-                printf("comanda:%s, stato prec: %c\n", current_com.tbl, bufferk[kbuf_len-2]);            
+            printf("Comanda in servizio per tavolo :%s, stato prec: %c\n", current_com.tbl, bufferk[kbuf_len-2]);  
+            fflush(stdout);          
                                             fseek(comande, -2, SEEK_CUR);   // metto il puntatore nel file davanti allo stato
                                             fprintf(comande, "s");          // metto la stato preparazione anche nel file
                                             break;
@@ -536,18 +622,102 @@ int main (int argnum, char** arg) {
                             }
 
                         break;
+/* ----- FINE GESTIONE PROTOCOLLO CON KITCHEN DEVICE ----- */
+
+
+/* ----- GESTIONE COMANDI SERVER ----- */
                         default:
                             memset(buffer, '\0', BUFF_DIM);
+                            memset(typed, '\0', 5);
                             fgets(buffer, BUFF_DIM, stdin);
             printf("%s\n", buffer);
                             sscanf(buffer, "%s", typed);
                             if(!strcmp(typed, "stat")){
+                                char to_print[4];
+                                struct comanda printing_com;
+                                char temp_buff[BUFF_DIM];
+                                uint16_t kbuf_len;
+                    
+                                memset(to_print, '\0', 4);
+                                sscanf(buffer, "%s %[^\n]%*c", typed, to_print);
+                                memset(temp_buff, '\0', BUFF_DIM);
+
+                                if(!strcmp(to_print, "p") || 
+                                   !strcmp(to_print, "s") ||
+                                   !strcmp(to_print, "a") ){    // stampo tutte le comande nello stato richiesto
+
+                                    comande = fopen(ORDINATIONS, "r+");
+                                    if(comande != NULL){
+                                        while(!feof(comande)){
+                                            fscanf(comande,"%s %s", printing_com.tbl, printing_com.orderId);    // salvo tavolo e comanda 
+                                            fgets(temp_buff, BUFF_DIM, comande);
+                                            if(!feof(comande)){      // escape se fine file
+                                                break;
+                                            }
+                                            kbuf_len = strlen(temp_buff);
+                                            if(temp_buff[kbuf_len-2] == to_print[0]){     // stato comanda == richiesta comando stat
+                                                temp_buff[kbuf_len-2] = '\n';      // rimuovo lo stato dall' ordine
+                                                temp_buff[kbuf_len-3] = '\n';      // rimuovo lo spazio tra comanda e stato per print
+                                                printOrder(temp_buff, printing_com.tbl, printing_com.orderId, ' ', 0);  
+                                            }
+
+                                        }
+                                        fclose(comande);
+                                    }
+
+                                }else if(to_print[0] == 'T'){   // stampo tutte le comande relative al tavolo indicato
+                                    char tmp_stat = ' ';
+
+                                    comande = fopen(ORDINATIONS, "r+");
+                                    if(comande != NULL){
+                                        while(!feof(comande)){
+                                            fscanf(comande,"%s %s", printing_com.tbl, printing_com.orderId);    // salvo tavolo e comanda 
+                                            fgets(temp_buff, BUFF_DIM, comande);
+                                            if(!feof(comande)){      // escape se fine file
+                                                break;
+                                            }
+                                            kbuf_len = strlen(temp_buff);
+                                            if(!strcmp(to_print, printing_com.tbl)){     // tavolo comanda == richiesta tavolo stat
+                                                tmp_stat = temp_buff[kbuf_len-2];       // salvo stato comanda
+                                                temp_buff[kbuf_len-2] = '\n';           // rimuovo lo stato dall'ordine
+                                                temp_buff[kbuf_len-3] = '\n';           // rimuovo lo spazio tra comanda e stato per print
+                                                printOrder(temp_buff, " ", printing_com.orderId, tmp_stat, 0);  
+                                            }
+
+                                        }
+                                        fclose(comande);
+                                    }
+
+                                }else{      // nessuna opzione in 'stat'
+                                    char tmp_stat = ' ';
+
+                                    comande = fopen(ORDINATIONS, "r+");
+                                    if(comande != NULL){
+                                        while(!feof(comande)){
+                                            fscanf(comande,"%s %s", printing_com.tbl, printing_com.orderId);    // salvo tavolo e comanda 
+                                            fgets(temp_buff, BUFF_DIM, comande);
+                                            if(!feof(comande)){      // escape se fine file
+                                                break;
+                                            }
+                                            kbuf_len = strlen(temp_buff);
+                                            // stampo tutte le comande nel file
+                                            tmp_stat = temp_buff[kbuf_len-2];       // salvo stato comanda
+                                            temp_buff[kbuf_len-2] = '\n';           // rimuovo lo stato dall'ordine
+                                            temp_buff[kbuf_len-3] = '\n';           // rimuovo lo spazio tra comanda e stato per print
+                                            printOrder(temp_buff, printing_com.tbl, printing_com.orderId, tmp_stat, 1);
+
+                                        }
+                                        fclose(comande);
+                                    }
+
+                                }
+
 
                                             
                             }else if(!strcmp(typed, "stop")){
                                 int end_service = 1;
                                 char temp_buf[BUFF_DIM];
-                                comande = fopen("ordinations.txt", "r");    // controllo che tutte le comande siano servite
+                                comande = fopen(ORDINATIONS, "r");    // controllo che tutte le comande siano servite
                                 if(comande != NULL){
                                     char stat;
                                     int line_dim;
@@ -565,34 +735,41 @@ int main (int argnum, char** arg) {
                                     fclose(comande);
                                 }else{
                                     printf("File 'ordinations.txt' assente\n");
+                                    fflush(stdout);
                                 }
                                 if(end_service){    // avvio chiusura tutti device
-                                    devices = fopen("devices.txt", "r");
+                                    devices = fopen(CONN_DEVICES, "r");
                                     if(devices != NULL){
                                         while(!feof(devices)){
                                             fscanf(devices, "%d %c %*s", &dev.fd, &dev.type);
                                             if(feof(devices)){
                                             break;
                                             }
-                                            if(dev.type == 'K' || dev.fd == 'T'){ 
+                                            if(dev.type == 'K' || dev.fd == 'T'){   // chiudo la connessione ai kd e td, avviandone la procedura di spegnimento
                                             close(dev.fd);
                                             }
                                         }
                                     fclose(devices);
                                     }
-                                    remove("devices.txt");
+                                    // remove(CONN_DEVICES);      // file devices per le connessioni attive
                                     exit(0);
                                 }else{
                                     printf("Stop non eseguibile\n");
+                                    fflush(stdout);
                                 }
                             }else{      // stampo associazioni tbl <-> fd
                                 int jj;
+                                printf(" Comando non valido\n");
+                                fflush(stdout);
                                 for(jj = 0; jj < MAX_TABLE; jj++){
                                     printf("tb: T%d -> sock: %d\n", jj+1, sock_tb[jj]);
+                                    fflush(stdout);
                                 }
                             }
                             
                         break;
+/* ----- FINE GESTIONE COMANDI SERVER ----- */
+
                     }                  
                 }
             }

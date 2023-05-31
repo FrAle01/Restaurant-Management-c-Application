@@ -42,7 +42,7 @@ int past_date(char* data){
     time(&raw);
     ts = localtime(&raw);
     t_day =(*ts).tm_mday;
-    t_month = (*ts).tm_mon;
+    t_month = (*ts).tm_mon + 1;     // tm_mon imposta i mesi da 0 a 11
     t_year = (*ts).tm_year-100;
     
     sscanf(data, "%d-%d-%d", &day, &month, &year);
@@ -94,17 +94,16 @@ int main (int argnum, char** arg) {
     send(sd, (void*)&device, 1, 0);   // segnalo al server il tipo di device da cui sto comunicando
     printf("--------------- BENVENUTO NEL SISTEMA DI PRENOTAZIONE DEL RISTORANTE DA NONNA PINA --------------\n");
         
-    while(1){
-        printf("\nhelp -> specifiche comandi\n");
-        printf("find -> ricerca disponibilità per una prenotazione\n");
-        printf("book -> invia una prenotazione\n");
-        printf("esc  -> termina il client\n\n");
+    printf("\nhelp <comando> -> specifica comando\n");
+    printf("find -> ricerca disponibilità per una prenotazione\n");
+    printf("book -> invia una prenotazione\n");
+    printf("esc  -> termina il client\n\n");
+    fflush(stdout);
 
+    while(1){
         memset(buffer, '\0', BUFF_DIM);
         fgets(buffer, BUFF_DIM, stdin);
         sscanf(buffer, "%s", option);
-
-        // printf("%s\n", option);
 
         if(!strcmp(option, "find")){
             char msg[MSG_DIM]; 
@@ -117,10 +116,12 @@ int main (int argnum, char** arg) {
             // CONTROLLI SU INPUT
             if(past_date(req.date)){               // controllo che la data non sia nel passato
                 printf("Controllare sintassi data e che questa sia futura al giorno odierno\n");
+                fflush(stdout);
                 continue;
             }
-            if(req.hour < 19 || req.hour > 23){     // controllo che l'orario inserito concordi con l'apertura del ristorante
+            if(req.hour < 12 || req.hour > 24){     // controllo che l'orario inserito concordi con l'apertura del ristorante
                 printf("Controllare orari ristorante\n");
+                fflush(stdout);
                 continue;
             }
             format_data(req.date);      // scrivo la data in formato dd-mm-yy
@@ -133,11 +134,13 @@ int main (int argnum, char** arg) {
             ans_dim = ntohs(ans_dim);
             if(ans_dim == 0){
                 printf("Non ci sono tavoli disponibili per i valori inseriti\n");
+                fflush(stdout);
                 continue;
             }
             memset(buffer, '\0', BUFF_DIM);
             recv(sd, (void*)buffer, ans_dim, 0);            //  riceve tabella tavoli disponibili
             printf("%s\n", buffer);
+            fflush(stdout);
             //sscanf(buffer, "%*d) %s %s %*s %*d) %s %s %*s %*d) %s %s %*s", offer[0].tb, offer[0].room, offer[1].tb, offer[1].room, offer[2].tb, offer[2].room);
             for(i =0; i<MAX_TABLE; i++){       // pulizia di offerta
                 memset(offer[i].tb,'\0', sizeof(offer[i].tb));
@@ -145,6 +148,7 @@ int main (int argnum, char** arg) {
                 memset(offer[i].descr,'\0', sizeof(offer[i].descr));
             }
             count = 0;
+            memset(check, '\0', 4);     // pulizia check
             for(i =0; i<MAX_TABLE; i++){
                 char lista[4];
                 sscanf(buffer + count, "%s %s %s %s %n", lista, offer[i].tb, offer[i].room, offer[i].descr, &ret);
@@ -166,18 +170,20 @@ int main (int argnum, char** arg) {
             code = 'B';
             if(!find_done){
                 printf("Eseguire una find prima di tentare una prenotazione\n");
+                fflush(stdout);
                 continue;
             }
             sscanf(buffer, "%s %u", option, &pren_num);
             // verifica prenotazione valida
             if(pren_num <=0 || pren_num > MAX_TABLE){
-                printf("Numero prenotazione non valido, scegliere tra le prenotazioni disponibili\n");
+                printf("Numero prenotazione non valido, scegliere tra le prenotazioni disponibili\n\n");
+                fflush(stdout);
                 continue;
             }
             if(offer[pren_num-1].av){   // esiste la prenotazione richiesta dall'utente
                 strcpy(req.table, offer[pren_num-1].tb);
             }else{
-                printf("Numero prenotazione non valido, riprovare!\n");
+                printf("Numero prenotazione non valido, riprovare!\n\n");
                 continue;
             }
             
@@ -187,26 +193,28 @@ int main (int argnum, char** arg) {
             recv(sd, (void*)&book_ok, sizeof(uint16_t), 0); // server risponderà per confermare prenotazione con il codice di questa, 0 se non validata (es inserito un valore errato)
             book_ok = ntohs(book_ok);
             if(book_ok){
-                printf("PRENOTAZIONE CONFERMATA\n");
-                printf("Codice prenotazione: %d\n", book_ok);
+                printf("PRENOTAZIONE EFFETTUATA\n");
+                printf("Codice prenotazione: %d\n\n", book_ok);
             }else{ // book_ok == 0 --> prenotazione non a buon fine
                 printf("PRENOTAZIONE NON PIU' VALIDA\n");
-                printf("Prego rieseguire una find\n");
+                printf("Prego rieseguire una find\n\n");
             }
+            fflush(stdout);
 
         }else if(!strcmp(option, "help")){
             char command[5]; // indica il comando di cui si richede le specifiche
             sscanf(buffer, "%s %s", option, command);
             if(!strcmp(command, "find")){
                 printf("Il comando %s richiede al server la disponibilità per un numero di posti in una data, a una specifica ora\n", command);
-                printf("sintassi:\n\t%s *nome* *posti* *data(DD-MM-YY)* *ora(HH)*\n", command);
+                printf("sintassi:\n\t%s <nome> <posti> <data(DD-MM-YY)> <ora(HH)>\n", command);
             }
             if(!strcmp(command, "book")){
                 printf("Il comando %s richiede la prenotazione al server con l'opzione scelta\n", command);
-                printf("sintassi:\n\t%s *opzione*\n", command);
+                printf("sintassi:\n\t%s <opzione>\n", command);
             }if(!strcmp(command, "esc")){
                 printf("Il comando %s interrompe la connessione al server e termina questo client\n", command);
             }
+            fflush(stdout);
 
         }else if(!strcmp(option, "esc")){
             close(sd);
@@ -214,6 +222,7 @@ int main (int argnum, char** arg) {
         
         }else{
             printf("Comando inserito non valido\n\n");
+            fflush(stdout);
         }
 
         

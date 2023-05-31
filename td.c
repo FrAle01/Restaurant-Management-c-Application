@@ -178,9 +178,12 @@ int main (int argnum, char** arg) {
 
     while(1){   // [LOGIN] => controllo che il codice di prenotazione inserito sia valido 
         printf("Inserire il numero della prenotazione:\n");
+        fflush(stdout);
+
         scanf("%d", &cod_pren);
         if(cod_pren <= 2000){       // per costruzione del servizio i codici di prenotazione saranno tutti > 2000
             printf("Codice prenotazione inserito non valido, si prega di riprovare\n\n");
+            fflush(stdout);           
             continue;
         }
 
@@ -202,6 +205,7 @@ int main (int argnum, char** arg) {
                 printf("Codice di prenotazione già usato da un altro device\n");
             }
         }
+        fflush(stdout);
     }
     
     cod_pren = ntohs(cod_pren);
@@ -226,7 +230,6 @@ int main (int argnum, char** arg) {
         exit(1);
     }
 
-    fflush(stdout);
     printf("-------------- BENVENUTI ------------\n");
     printf("\t--- Menù del giorno ---\n");
     printf("%s\n", menu);
@@ -237,6 +240,7 @@ int main (int argnum, char** arg) {
     printf("menu -> mostra il menù dei piatti\n");
     printf("comanda -> invia una comanda\n");
     printf("conto  -> chiede il conto\n\n");
+    fflush(stdout);
 
     while(1){
         int i=0;
@@ -249,12 +253,12 @@ int main (int argnum, char** arg) {
                     
                     memset(buffer, '\0', BUFF_DIM);
                     fgets(buffer, BUFF_DIM, stdin);
-    printf("in: %s\n", buffer);
                     sscanf(buffer, "%s", option);
 
                     if(!strcmp(option, "menu")){
                         printf("\t--- Menù del giorno ---\n"); 
                         printf("%s\n", menu);
+                        fflush(stdout);
 
                     }else if(!strcmp(option, "comanda")){
 
@@ -278,6 +282,7 @@ int main (int argnum, char** arg) {
                         comande = fopen(file_comande, "a");                         // inserisco la comanda nel file
                         fprintf(comande, "%s %s %c\n", nuova_comanda.id, nuova_comanda.order, nuova_comanda.status);
                         fclose(comande);
+                        fflush(stdout);
 
                         msg_dim = strlen(buffer)+ 1;
                         msg_dim_net = htons(msg_dim);
@@ -309,6 +314,7 @@ int main (int argnum, char** arg) {
                             fclose(check);
                         }else{
                             printf("File %s assente\n", file_comande);
+                            fflush(stdout);
                         }
 
                         if(end_service){                        
@@ -327,12 +333,12 @@ int main (int argnum, char** arg) {
                             close(sd);
                             FD_CLR(sd, &master_r);
                             FD_CLR(fileno(stdin), &master_r);
+                            // remove(file_comande);
                             exit(0);
                         }else{
                             printf("Comande ancora in attesa o preparazione, si prega di richiedere il conto a fine servizio\n");
                         }
-
-
+                        fflush(stdout);
 
                     }else if(!strcmp(option, "help")){
                         
@@ -343,23 +349,26 @@ int main (int argnum, char** arg) {
                         }
                         if(!strcmp(command, "comanda")){
                             printf("Il comando %s aggiunge una comanda in cucina in attesa di essere accettata da un cuoco\n", command);
-                            printf("sintassi:\n\t%s *cod_piatto1-quantità1 cod_piatto2-quantità2... cod_piattoN-quantitàN*\n", command);
+                            printf("sintassi:\n\t%s {<piatto_1-quantità_1>...<cpiatto_n-quantità_n>*\n", command);
                         }if(!strcmp(command, "conto")){
                             printf("Il comando %s richiede il conto\n", command);
                         }
+                        fflush(stdout);
                     }else{
-                        printf("Comando inserito non valido\n\n");
+                        // printf("Comando inserito non valido\n\n");
+                        // fflush(stdout);
                     }
+
                 }else if(i == sd){  // notifica sulle comande dal server
                     char from_srv[9];
                     int ii;
                     memset(buffer, '\0', BUFF_DIM);
                     ii = recv(sd, (void*)buffer, STAT_COMM, 0);
-    printf("da srv: %s\n", buffer);
                     if(ii == 0){    // avvio spegnimento td
                         close(sd);
                         FD_CLR(sd, &master_r);
                         FD_CLR(fileno(stdin), &master_r);
+                        // remove(file_comande);
                         exit(0);
                     }
 
@@ -367,7 +376,7 @@ int main (int argnum, char** arg) {
 
                     if(!strcmp(from_srv, "RICEVUTA")){    // avvio procedura disconnessione
                         printf("COMANDA RICEVUTA\n", buffer);
-                        
+                        fflush(stdout);                       
 
                     }else{      // aggiorno lo stato della comanda
                         char new_status;
@@ -393,6 +402,7 @@ int main (int argnum, char** arg) {
                         }else if(new_status == 's'){
                             printf("%s IN SERVIZIO\n", from_srv);
                         }
+                        fflush(stdout);
                     }                                     
                 }
             }

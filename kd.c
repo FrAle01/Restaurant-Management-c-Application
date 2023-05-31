@@ -51,12 +51,14 @@ void printOrder(int n){  // n->indice dell'array 'accepted' della comanda da sta
         num = atoi(c_num);  // quantità da ASCII a int
         printf("%d\n", num);
     }
+    fflush(stdout);
 }
 
 int checkOrder(char* tb, char* com, int t){
     int j;
     for(j = 0; j < t; j++){
         if(!strcmp(accepted[j].tbl, tb) && !strcmp(accepted[j].orderId, com)){   // ho trovato l'ordine che cerco
+            accepted[j].status = 's';
             return 1;
         }
     }
@@ -113,8 +115,9 @@ int main (int argnum, char** arg) {
     printf("take -> accetta una comanda\n");
     printf("show -> mostra comande accettate in preparazione\n");
     printf("ready  -> imposta una comanda in servizio\n\n");
+    fflush(stdout);
 
-    while(1){
+    while(1){       
         
         int i=0;
 
@@ -132,9 +135,11 @@ int main (int argnum, char** arg) {
                         if(on_hold > 0){
                             msg_to_srv = htons(1);
                             send(sd, (void*)&msg_to_srv, sizeof(uint16_t), 0);      // invio 1 al server --> richiesta di comanda da preparare
+                            on_hold--;
                             // attendo il messaggio dal server nella select 
                         }else{      // on_hold == 0, non ci sono comande da accettare
                             printf("Non sono presenti comande da accetare\n");
+                            fflush(stdout);
                         }                   
 
 
@@ -145,14 +150,16 @@ int main (int argnum, char** arg) {
                                 printOrder(jj);
                             }
                         }
+                        printf("\n");
+                        fflush(stdout);
 
                     }else if(!strcmp(option, "ready")){
                         char settb[4];
                         char setcom[5];
                         int valid_order = 0;
-                        sscanf(buffer,"%s %s-%s", option, settb, setcom);   // leggo codice com e tavolo da segnalare pronti
-    printf("lettura comanda: %s, tavolo: %s\n", settb, setcom);
-                        valid_order = checkOrder(settb, setcom, taken_orders);    // controllo che l'ordine esista
+                        sscanf(buffer,"%s %[^-]%*c%s", option, setcom, settb);   // leggo codice com e tavolo da segnalare pronti
+
+                        valid_order = checkOrder(settb, setcom, taken_orders);    // controllo che l'ordine esista, se esiste lo imposta a in servizio
                         if(valid_order){    // comunico a server, e td, l'ordine in servizio
                             char ready[9];
                             sprintf(ready, "%s %s", settb, setcom);
@@ -166,6 +173,7 @@ int main (int argnum, char** arg) {
                         
                         }else{
                             printf("Ordine: %s-%s non esistente\n", settb, setcom);
+                            fflush(stdout);
                         }
 
                     }else if(!strcmp(option, "help")){
@@ -183,8 +191,10 @@ int main (int argnum, char** arg) {
                             printf("Il comando %s imposta come pronta la comanda indicata\n", command);
                             printf("Sintassi:\n\t*cod_comanda-tavolo*");
                         }
+                        fflush(stdout);
                     }else{
                         printf("Comando inserito non valido\n\n");
+                        fflush(stdout);
                     }
 
                 }else if(i == sd){      // socket a server
@@ -197,28 +207,31 @@ int main (int argnum, char** arg) {
                         exit(0);
                     }
                     from_srv = ntohs(from_srv);
-    printf("value from srv: %d\n", from_srv);    
                     if(from_srv == 65535){
-                        printf("COMANDA IN SERVIZIO\n");
+                        printf("COMANDA IN SERVIZIO\n\n");
+                        fflush(stdout);
                     }else if(from_srv == 2000){
                         on_hold = 0;
-                        printf("Non sono presenti comande da accettare");
+                        printf("Non sono presenti comande da accettare\n");
+                        fflush(stdout);
                     }else if(from_srv > 2000 && from_srv != 65535){
                         on_hold = from_srv - 2000;
                         for(j =0; j < on_hold; j++){
                             printf("*");    // mostro tante * quante le comande in attesa di preparazione
                         }printf("\n");
+                        fflush(stdout);
                     }else if(from_srv < 2000){  // from_srv < 2000 --> dimensione della comanda accettata
                         char temp_buf[BUFF_DIM];
                         int read;
                         memset(temp_buf, '\0', BUFF_DIM);
                         recv(sd, (void*)temp_buf, from_srv, 0);             // comanda da preparare
-    printf("da srv: %s\n", temp_buf);
 
                         accepted[taken_orders].status = 'p';    // imposto l'ordine in preparazione
                         sscanf(temp_buf, "%s %s %n", accepted[taken_orders].tbl, accepted[taken_orders].orderId, &read);    // copio ordine id e tavolo nella struttura
                         strcpy(accepted[taken_orders].order, temp_buf + read);      // ricopio l'ordine stesso
                         printOrder(taken_orders);
+                        printf("\n");
+                        fflush(stdout);
 
                         taken_orders++;     // incremento il numero di ordini accettati dal td
                     }
