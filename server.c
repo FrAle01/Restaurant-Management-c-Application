@@ -277,12 +277,13 @@ int main (int argnum, char** arg) {
         for(; i <= fdmax; i++){
             
             if(FD_ISSET(i, &read_fds)){ // socket pronto perché rimasto in insieme read_fds
+    /* --- NEW CONNECTION --- */
                 if(i == listener){      // ricevuta richiesta su socket di ascolto
                     cl_len = sizeof(cl_addr);
                     new_sd = accept(listener, (struct sockaddr*)&cl_addr, &cl_len);   // accept di richieste
                     FD_SET(new_sd, &master_r);
                     if(new_sd > fdmax){ fdmax = new_sd; }
-
+        /* --- TYPE from new device --- */       
                     recv(new_sd, (void*)&new_dev.type, 1, 0);
 
                     new_dev.fd = new_sd;
@@ -336,6 +337,7 @@ int main (int argnum, char** arg) {
                                 continue;
                             }
                             sscanf(buffer,"%c", &option);
+    /* --- FIND from cli --- */
                             if(option == 'F'){           // client ha richiesto la disponibilità
                                 int j,k;
                                 int conta;
@@ -383,7 +385,7 @@ int main (int argnum, char** arg) {
                                 send(i, (void*)&dim_net, sizeof(uint16_t), 0);
                                 send(i, (void*)disponibilita, dim, 0);
 
-
+    /* --- BOOK from cli --- */
                             }else if(option == 'B'){     // client vuole prenotare
                                 int stillFree = 1;
                                 sscanf(buffer, "%c %s %02d %s %s %d", &option, request.date, &request.hour, request.tb, request.name, &request.seat);
@@ -444,7 +446,8 @@ int main (int argnum, char** arg) {
                                 continue;
                             }
                             td_value = ntohs(td_value);
-            // Protocollo di login su td --> (tuti i codice prenotazione ricevuti  > 2000)
+                    // Protocollo di login su td --> (tuti i codice prenotazione ricevuti  > 2000)
+    /* --- LOGIN from td --- */
                             if(td_value > 2000){    // gestione del codice di prenotazione inviato 
             printf("From table: %d\n", td_value);
                                 prenotazioni = fopen(RESERVATIONS, "r+");
@@ -491,7 +494,7 @@ int main (int argnum, char** arg) {
                                     fclose(prenotazioni);
                                 }
                             }
-            // Ricezione comanda da td
+    /* --- COMANDA from td --- */
                             if(td_value <= 2000){   // arrivo nuova comanda e dim msg data da td_value
                                 
                                 memset(buffer, '\0', BUFF_DIM);         // pulizia buffer
@@ -512,7 +515,7 @@ int main (int argnum, char** arg) {
                                 w_order++;
                                 sprintf(buffer, "RICEVUTA\n");
                                 send(i, (void*)buffer, STAT_UPDATE_DIM, 0);  
-
+        /* --- broadcast to kd --- */
                                 broadcat_kd(w_order, -1);   // notifico i kd della nuova comanda
                             }
                         break;
@@ -543,6 +546,7 @@ int main (int argnum, char** arg) {
                             }
 
                             kd_value = ntohs(kd_value);
+    /* --- TAKE from kd --- */
                             if(kd_value == 1){      // kitchen ha eseguito una take --> invio comanda in attesa da più tempo
                                 struct comanda accepted_com;
                                 int tb_fd;
@@ -576,15 +580,18 @@ int main (int argnum, char** arg) {
                                     }
                                     fclose(comande);
                                 }
+        /* --- notification to td --- */
                                 memset(buffer, '\0', BUFF_DIM);         // pulizia buffer
                                 tb_fd = tbtosock(accepted_com.tbl);
             printf("Notification to table: %s\n", accepted_com.tbl);
                                 sprintf(buffer, "%s p", accepted_com.orderId); // costruisco messaggio per comunicare a td comanda accettata
                                 send(tb_fd, (void*)buffer, STAT_UPDATE_DIM, 0);// notifico il td della comanda in preparazione
-
+        /* --- broadcast to kd --- */
                                 broadcat_kd(w_order, i);    // notifico tutti i kd che una comanda è atat accettata, eccetto quello che l'ha accettata
 
                             }
+
+    /* --- READY from kd --- */
                             if(kd_value > 1){   // kd_value rappresenterà la dim del messaggio dal kd (messaggio di comanda in servizio) 
                                 char temp_buf[BUFF_DIM];
                                 struct comanda ready_com;
@@ -594,7 +601,8 @@ int main (int argnum, char** arg) {
                                 sscanf(temp_buf, "%s %s", ready_com.tbl, ready_com.orderId);
                                 tb_fd = tbtosock(ready_com.tbl);
                                 sprintf(temp_buf, "%s s", ready_com.orderId);
-                                send(tb_fd, (void*)temp_buf, STAT_UPDATE_DIM, 0);   // notifico il td della comanda in servizio
+        /* --- notification to td --- */
+                                send(tb_fd, (void*)temp_buf, STAT_UPDATE_DIM, 0);
                                 
                                 comande = fopen(ORDINATIONS, "r+");       // aggiorno lo stato della comanda nel file                                
                                 if(comande != NULL){
@@ -630,35 +638,41 @@ int main (int argnum, char** arg) {
                             memset(buffer, '\0', BUFF_DIM);
                             memset(typed, '\0', 5);
                             fgets(buffer, BUFF_DIM, stdin);
-            printf("%s\n", buffer);
                             sscanf(buffer, "%s", typed);
+    
+    /* --- comando STAT --- */
                             if(!strcmp(typed, "stat")){
                                 char to_print[4];
                                 struct comanda printing_com;
                                 char temp_buff[BUFF_DIM];
+                                char check_buff[BUFF_DIM];
                                 uint16_t kbuf_len;
-                    
+
                                 memset(to_print, '\0', 4);
                                 sscanf(buffer, "%s %[^\n]%*c", typed, to_print);
                                 memset(temp_buff, '\0', BUFF_DIM);
+                                memset(check_buff, '\0', BUFF_DIM);
+
 
                                 if(!strcmp(to_print, "p") || 
                                    !strcmp(to_print, "s") ||
                                    !strcmp(to_print, "a") ){    // stampo tutte le comande nello stato richiesto
 
-                                    comande = fopen(ORDINATIONS, "r+");
+                                    comande = fopen(ORDINATIONS, "r");
                                     if(comande != NULL){
                                         while(!feof(comande)){
                                             fscanf(comande,"%s %s", printing_com.tbl, printing_com.orderId);    // salvo tavolo e comanda 
                                             fgets(temp_buff, BUFF_DIM, comande);
-                                            if(!feof(comande)){      // escape se fine file
+                                            if(!strcmp(check_buff, temp_buff)){      // escape se fine file
                                                 break;
                                             }
                                             kbuf_len = strlen(temp_buff);
                                             if(temp_buff[kbuf_len-2] == to_print[0]){     // stato comanda == richiesta comando stat
-                                                temp_buff[kbuf_len-2] = '\n';      // rimuovo lo stato dall' ordine
-                                                temp_buff[kbuf_len-3] = '\n';      // rimuovo lo spazio tra comanda e stato per print
-                                                printOrder(temp_buff, printing_com.tbl, printing_com.orderId, ' ', 0);  
+                                                temp_buff[kbuf_len-2] = '\n';       // rimuovo lo stato dall' ordine
+                                                temp_buff[kbuf_len-3] = '\n';       // rimuovo lo spazio tra comanda e stato per print
+                                                printOrder(temp_buff+1, printing_com.tbl, printing_com.orderId, ' ', 0);  
+                                                strcpy(check_buff, temp_buff);      // copio il temp_buff (con \n invece di status) in check
+
                                             }
 
                                         }
@@ -668,12 +682,12 @@ int main (int argnum, char** arg) {
                                 }else if(to_print[0] == 'T'){   // stampo tutte le comande relative al tavolo indicato
                                     char tmp_stat = ' ';
 
-                                    comande = fopen(ORDINATIONS, "r+");
+                                    comande = fopen(ORDINATIONS, "r");
                                     if(comande != NULL){
                                         while(!feof(comande)){
                                             fscanf(comande,"%s %s", printing_com.tbl, printing_com.orderId);    // salvo tavolo e comanda 
                                             fgets(temp_buff, BUFF_DIM, comande);
-                                            if(!feof(comande)){      // escape se fine file
+                                            if(!strcmp(check_buff, temp_buff)){      // escape se fine file
                                                 break;
                                             }
                                             kbuf_len = strlen(temp_buff);
@@ -681,7 +695,9 @@ int main (int argnum, char** arg) {
                                                 tmp_stat = temp_buff[kbuf_len-2];       // salvo stato comanda
                                                 temp_buff[kbuf_len-2] = '\n';           // rimuovo lo stato dall'ordine
                                                 temp_buff[kbuf_len-3] = '\n';           // rimuovo lo spazio tra comanda e stato per print
-                                                printOrder(temp_buff, " ", printing_com.orderId, tmp_stat, 0);  
+                                                printOrder(temp_buff+1, " ", printing_com.orderId, tmp_stat, 0);  
+                                                strcpy(check_buff, temp_buff);// copio il temp_buff (con \n invece di status) in check
+
                                             }
 
                                         }
@@ -691,20 +707,21 @@ int main (int argnum, char** arg) {
                                 }else{      // nessuna opzione in 'stat'
                                     char tmp_stat = ' ';
 
-                                    comande = fopen(ORDINATIONS, "r+");
+                                    comande = fopen(ORDINATIONS, "r");
                                     if(comande != NULL){
                                         while(!feof(comande)){
                                             fscanf(comande,"%s %s", printing_com.tbl, printing_com.orderId);    // salvo tavolo e comanda 
                                             fgets(temp_buff, BUFF_DIM, comande);
-                                            if(!feof(comande)){      // escape se fine file
+                                            if(!strcmp(check_buff, temp_buff)){      // escape se fine file (check == temp)
                                                 break;
-                                            }
+                                            } 
                                             kbuf_len = strlen(temp_buff);
                                             // stampo tutte le comande nel file
                                             tmp_stat = temp_buff[kbuf_len-2];       // salvo stato comanda
                                             temp_buff[kbuf_len-2] = '\n';           // rimuovo lo stato dall'ordine
                                             temp_buff[kbuf_len-3] = '\n';           // rimuovo lo spazio tra comanda e stato per print
-                                            printOrder(temp_buff, printing_com.tbl, printing_com.orderId, tmp_stat, 1);
+                                            printOrder(temp_buff+1, printing_com.tbl, printing_com.orderId, tmp_stat, 1);
+                                            strcpy(check_buff, temp_buff);// copio il temp_buff (con \n invece di status) in check
 
                                         }
                                         fclose(comande);
@@ -713,7 +730,7 @@ int main (int argnum, char** arg) {
                                 }
 
 
-                                            
+    /* --- comando STOP --- */                                           
                             }else if(!strcmp(typed, "stop")){
                                 int end_service = 1;
                                 char temp_buf[BUFF_DIM];
@@ -758,13 +775,15 @@ int main (int argnum, char** arg) {
                                     fflush(stdout);
                                 }
                             }else{      // stampo associazioni tbl <-> fd
-                                int jj;
+                                /* int jj;
                                 printf(" Comando non valido\n");
                                 fflush(stdout);
                                 for(jj = 0; jj < MAX_TABLE; jj++){
                                     printf("tb: T%d -> sock: %d\n", jj+1, sock_tb[jj]);
                                     fflush(stdout);
-                                }
+                                }   */
+                                print("Comando non valido\n\n");
+                                fflush(stdout);
                             }
                             
                         break;
@@ -777,4 +796,3 @@ int main (int argnum, char** arg) {
     }
     exit(0);
 }
-    
