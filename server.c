@@ -782,7 +782,7 @@ int main (int argnum, char** arg) {
                                     printf("tb: T%d -> sock: %d\n", jj+1, sock_tb[jj]);
                                     fflush(stdout);
                                 }   */
-                                print("Comando non valido\n\n");
+                                printf("Comando non valido\n\n");
                                 fflush(stdout);
                             }
                             
