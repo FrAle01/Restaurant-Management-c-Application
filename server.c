@@ -9,8 +9,8 @@
 #include <sys/time.h>
 #include <time.h>
 
-#define SCNu16   "d"
-// decimal scanf format for int16_t
+#define PRIu16 "hu"
+// printf format for uint16_t
 
 #define BUFF_DIM 1024
 #define MAX_TABLE 3
@@ -344,6 +344,8 @@ int main (int argnum, char** arg) {
                                 uint16_t dim, dim_net;
                                 char disponibilita[BUFF_DIM];
                                 sscanf(buffer, "%c %s %d %s %02d", &option, request.name, &request.seat, request.date, &request.hour);
+            printf("Request table on %s %02d from user %s\n", request.date, request.hour, request.name);
+            fflush(stdout);
                                 for(j = 0; j<MAX_TABLE; j++){   
                                     if(tav[j].chair >= request.seat){        // metto disponibili i tavoli con almeno i posti richiesti dal client
                                         tav[j].avaiable = 1;
@@ -389,6 +391,8 @@ int main (int argnum, char** arg) {
                             }else if(option == 'B'){     // client vuole prenotare
                                 int stillFree = 1;
                                 sscanf(buffer, "%c %s %02d %s %s %d", &option, request.date, &request.hour, request.tb, request.name, &request.seat);
+            printf("Request table %s from user %s\n", request.tb, request.name);
+            fflush(stdout);  
                                 prenotazioni = fopen(RESERVATIONS, "r");
                                 if(prenotazioni != NULL){ 
                                     while(!feof(prenotazioni)){
@@ -397,6 +401,8 @@ int main (int argnum, char** arg) {
                                             stillFree = 0;
                                             request.bookId  = 0;
                                             request.bookId = htons(request.bookId);
+            printf("Table already taken\n");
+            fflush(stdout);
                                             send(i, (void*)&request.bookId, sizeof(uint16_t), 0);
                                             break;
                                         }
@@ -405,6 +411,8 @@ int main (int argnum, char** arg) {
                                 }
                                 prenotazioni = fopen(RESERVATIONS, "a");
                                 if(stillFree){ // prenotazione possibile, la aggiungo al file
+            printf("Booking confirmed\n");
+            fflush(stdout);
 
                                     get_ts(request.timestamp);          // creo il timestamp per la prenotazione
                                     request.bookId = reservationIds++;  // assegno il codice di prenotazione
@@ -453,14 +461,14 @@ int main (int argnum, char** arg) {
                                 prenotazioni = fopen(RESERVATIONS, "r+");
                                 if(prenotazioni != NULL){
                                     while(!feof(prenotazioni)){
-                                        fscanf(prenotazioni, "%*s %*d %s %d %*s %*d %*s %d", attend.tb, &attend.bookId, &attend.attendance);
+                                        fscanf(prenotazioni, "%*s %*d %s %hu %*s %*d %*s %d", attend.tb, &attend.bookId, &attend.attendance);
                                         if(td_value == attend.bookId && attend.attendance == 0){    // prenotazione esistente e ancora non usata
                                             uint16_t n_tav;
                                             int ii;
 
             printf("Found table: %s, on booking id: %d already used(%d)\n", attend.tb, attend.bookId, attend.attendance);
             fflush(stdout);
-                                            sscanf(attend.tb, "T%d", &n_tav);
+                                            sscanf(attend.tb, "T%hu", &n_tav);
                                             ii = n_tav - 1;
                                             if(sock_tb[ii] == -1){   //al tavolo ancora non c'è associato un socket
                                                 sock_tb[ii] = i;    // associo il socket 'i' al tavolo
@@ -728,7 +736,8 @@ int main (int argnum, char** arg) {
                                     }
 
                                 }
-
+                                printf("\n");
+                                fflush(stdout);
 
     /* --- comando STOP --- */                                           
                             }else if(!strcmp(typed, "stop")){
@@ -743,7 +752,8 @@ int main (int argnum, char** arg) {
                                         line_dim = strlen(temp_buf);
                                         stat = temp_buf[line_dim-2];        // controllo il penulmtimo carattere della riga (ultimo è \n)
 
-                                        if(stat != 's'){        // esiste almeno una comanda non servita ==> Servizio non terminato
+                                        if(stat != 's' &&
+                                            (stat == 'a' || stat == 'p')){        // esiste almeno una comanda non servita ==> Servizio non terminato
                                             end_service = 0;
                                             break;
                                         }
@@ -771,24 +781,16 @@ int main (int argnum, char** arg) {
                                     // remove(CONN_DEVICES);      // file devices per le connessioni attive
                                     exit(0);
                                 }else{
-                                    printf("Stop non eseguibile\n");
+                                    printf("Stop non eseguibile\n\n");
                                     fflush(stdout);
                                 }
-                            }else{      // stampo associazioni tbl <-> fd
-                                /* int jj;
-                                printf(" Comando non valido\n");
-                                fflush(stdout);
-                                for(jj = 0; jj < MAX_TABLE; jj++){
-                                    printf("tb: T%d -> sock: %d\n", jj+1, sock_tb[jj]);
-                                    fflush(stdout);
-                                }   */
+                            }else{                           
                                 printf("Comando non valido\n\n");
                                 fflush(stdout);
                             }
                             
                         break;
 /* ----- FINE GESTIONE COMANDI SERVER ----- */
-
                     }                  
                 }
             }
