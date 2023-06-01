@@ -14,7 +14,7 @@
 #define BUFF_DIM 1024
 #define MSG_DIM 49 // 49 = 1 (codice operazione) + 25 (max caratteri per nome) + 3 (max cifre per posti prenotazione)
                    //       + 4 (char per tavolo) + 8 (char data) + 2 (cifre ora) + 6 (spazi + fine stringa)
-#define MAX_TABLE 3 // indica il numero massimo di tavoli disponibili (nel nostro ristorante ne abbiamo 3)
+#define MAX_TABLE 10 // indica il numero massimo di tavoli disponibili (nel nostro ristorante ne abbiamo 3)
 
 struct booking{ // struttura per informazioni sulle prenotazioni
     char date[8+1]; // data per prenotazione
@@ -224,8 +224,5 @@ int main (int argnum, char** arg) {
             printf("Comando inserito non valido\n\n");
             fflush(stdout);
         }
-
-        
     }
-    
 }

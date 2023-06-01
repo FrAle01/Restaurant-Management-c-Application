@@ -13,7 +13,7 @@
 // printf format for uint16_t
 
 #define BUFF_DIM 1024
-#define MAX_TABLE 3
+#define MAX_TABLE 10
 #define CL_DIM 49 // dim messaggio protocollo con cliente prenotazione
 #define STAT_UPDATE_DIM 8
 

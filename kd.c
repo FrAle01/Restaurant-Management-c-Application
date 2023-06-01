@@ -138,7 +138,7 @@ int main (int argnum, char** arg) {
                             on_hold--;
                             // attendo il messaggio dal server nella select 
                         }else{      // on_hold == 0, non ci sono comande da accettare
-                            printf("Non sono presenti comande da accetare\n");
+                            printf("Non sono presenti comande da accettare\n\n");
                             fflush(stdout);
                         }                   
 
@@ -212,7 +212,7 @@ int main (int argnum, char** arg) {
                         fflush(stdout);
                     }else if(from_srv == 2000){
                         on_hold = 0;
-                        printf("Non sono presenti comande da accettare\n");
+                        printf("Non sono presenti comande da accettare\n\n");
                         fflush(stdout);
                     }else if(from_srv > 2000 && from_srv != 65535){
                         on_hold = from_srv - 2000;

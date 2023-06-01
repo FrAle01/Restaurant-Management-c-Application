@@ -10,11 +10,14 @@
 #include <unistd.h>
 // #include <sys/time.h>
 
+#define SCNu16   "hu"
+// scanf format for uint16_t
+
 #define BUFF_DIM 1024
 #define MENU_DIM 1024
 #define STAT_COMM 8 // dimensione del messaggio dal server che comunica lo stato di una comanda
                     // cod_com (5) + stato (1) + spazio e finestringa (2)
-#define MAX_TABLE 3
+#define MAX_TABLE 10
 
 struct consumazione{
     char dish[4];
@@ -180,7 +183,7 @@ int main (int argnum, char** arg) {
         printf("Inserire il numero della prenotazione:\n");
         fflush(stdout);
 
-        scanf("%d", &cod_pren);
+        scanf("%hu", &cod_pren);
         if(cod_pren <= 2000){       // per costruzione del servizio i codici di prenotazione saranno tutti > 2000
             printf("Codice prenotazione inserito non valido, si prega di riprovare\n\n");
             fflush(stdout);           
@@ -375,7 +378,7 @@ int main (int argnum, char** arg) {
                     sscanf(buffer, "%s", from_srv);
 
                     if(!strcmp(from_srv, "RICEVUTA")){    // avvio procedura disconnessione
-                        printf("COMANDA RICEVUTA\n", buffer);
+                        printf("COMANDA RICEVUTA\n\n");
                         fflush(stdout);                       
 
                     }else{      // aggiorno lo stato della comanda
@@ -398,9 +401,9 @@ int main (int argnum, char** arg) {
                         fclose(comande);
                         }
                         if(new_status == 'p'){
-                            printf("%s IN PREPARAZIONE\n", from_srv);
+                            printf("%s IN PREPARAZIONE\n\n", from_srv);
                         }else if(new_status == 's'){
-                            printf("%s IN SERVIZIO\n", from_srv);
+                            printf("%s IN SERVIZIO\n\n", from_srv);
                         }
                         fflush(stdout);
                     }                                     
