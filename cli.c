@@ -92,7 +92,7 @@ int main (int argnum, char** arg) {
         exit(1);
     }
     send(sd, (void*)&device, 1, 0);   // segnalo al server il tipo di device da cui sto comunicando
-    printf("--------------- BENVENUTO NEL SISTEMA DI PRENOTAZIONE DEL RISTORANTE DA NONNA PINA --------------\n");
+    printf("--------------- BENVENUTO NEL SISTEMA DI PRENOTAZIONE DEL RISTORANTE VDG --------------\n");
         
     printf("\nhelp <comando> -> specifica comando\n");
     printf("find -> ricerca disponibilità per una prenotazione\n");

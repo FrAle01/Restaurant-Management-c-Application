@@ -263,8 +263,8 @@ int main (int argnum, char** arg) {
 
 
     printf("\nComandi accettati:\n");
-    printf("stat [table|status] -> Mostra comande relative a 'table' o 'status', tutte quelle giornaliere se opzione mancante\n");
-    printf("stop -> avvia procedura di spegnimento a tutti i table e kitchen devices, se tutte le comande sono in stato di servizio\n\n");
+    printf("> stat [table|status] -> Mostra comande relative a 'table' o 'status', tutte quelle giornaliere se opzione mancante\n");
+    printf("> stop -> avvia procedura di spegnimento a tutti i table e kitchen devices, se tutte le comande sono in stato di servizio\n\n");
     fflush(stdout);
 
 
