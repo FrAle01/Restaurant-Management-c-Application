@@ -57,7 +57,7 @@ void printOrder(int n){  // n->indice dell'array 'accepted' della comanda da sta
 int checkOrder(char* tb, char* com, int t){
     int j;
     for(j = 0; j < t; j++){
-        if(!strcmp(accepted[j].tbl, tb) && !strcmp(accepted[j].orderId, com)){   // ho trovato l'ordine che cerco
+        if(!strcmp(accepted[j].tbl, tb) && !strcmp(accepted[j].orderId, com) && accepted[j].status == 'p'){   // ho trovato l'ordine che cerco
             accepted[j].status = 's';
             return 1;
         }
@@ -172,7 +172,7 @@ int main (int argnum, char** arg) {
                             // attendo conferma da server come codice 69420
                         
                         }else{
-                            printf("Ordine: %s-%s non esistente\n", settb, setcom);
+                            printf("Ordine: %s-%s non esistente o gia in servizio\n\n", settb, setcom);
                             fflush(stdout);
                         }
 
