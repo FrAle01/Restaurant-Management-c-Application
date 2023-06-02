@@ -131,7 +131,7 @@ void broadcat_kd(uint16_t orders, int exeption){
     }
 }
 
-char* statostr(char letter){
+char* statostr(char letter){                // stampa la stringa corrispondente al carattere di stato
     switch(letter){
         case 'a':
             return "<in attesa>\0";
@@ -149,7 +149,8 @@ char* statostr(char letter){
 
 }
 
-void printOrder(char* ord, char* tab, char* comId, char st, char all){
+void printOrder(char* ord, char* tab, char* comId, char st, char all){      // stampa l'ordine 'ord' con tutte le indicazioni <comId> <tavolo> <stato> se all == 1;
+                                                                                                // se all == 0 stampa la caratteristica non nulla (o <stato> o <tavolo> 
     int count = 0;
     int ret = -1;
     char piatto[4];
