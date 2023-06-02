@@ -377,7 +377,7 @@ int main (int argnum, char** arg) {
 
                     sscanf(buffer, "%s", from_srv);
 
-                    if(!strcmp(from_srv, "RICEVUTA")){    // avvio procedura disconnessione
+                    if(!strcmp(from_srv, "RICEVUTA")){    // conferma ricezione comanda
                         printf("COMANDA RICEVUTA\n\n");
                         fflush(stdout);                       
 
