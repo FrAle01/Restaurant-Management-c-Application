@@ -1,4 +1,4 @@
-## 🍽️ Restaurant Client-Server Application
+## 🍽️ Restaurant Management - Computer Networks Project
 
 This project was developed as part of the **Computer Networks 2022/23** course and utilizes the **Client-Server** paradigm in **C** with the **TCP** protocol to manage table reservations and orders within a restaurant. The application is designed for a distributed environment and includes three main components:
 
